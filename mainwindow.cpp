@@ -10,8 +10,6 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     /*动态分配内存*/
-    bandPassBufLen = new int[CHANNELS];
-    notchBufLen = new int[CHANNELS];
     impedance = new int[CHANNELS];
     filtData = new double[CHANNELS];
     markerNames = new std::string[MANUAL_MAKER];
@@ -22,29 +20,27 @@ MainWindow::MainWindow(QWidget *parent)
     charts = new QChart[CHANNELS];
     originalData = new double[CHANNELS];
     channelNames = new std::string[CHANNELS];
-    /*计数器数组初始化*/
-    for(int i = 0; i < CHANNELS; i++)
-    {
-        bandPassBufLen[i] = 0;
-        notchBufLen[i] = 0;
-    }
     /*定时器初始化*/
     graphTimer = new QTimer(this);
     graphTimer->setInterval(GRAPH_FRESH);//设置定时周期，单位：毫秒
     graphTimer->start();
-    dataTimer = new QTimer(this);
-    dataTimer->setInterval(DATA_FRESH);
-    dataTimer->start();
     impTimer = new QTimer(this);
     impTimer->setInterval(IMPEDANCE_FRESH);
     impTimer->start();
+#ifdef NO_BOARD
+    dataTimer = new QTimer(this);
+    dataTimer->setInterval(DATA_FRESH);
+    dataTimer->start();
     /*随机数初始化*/
     qsrand(QDateTime::currentDateTime().toTime_t());
+#endif
     /*绘图板初始化*/
     initChart();
     /*信号与槽的链接*/
     connect(graphTimer, SIGNAL(timeout()), this, SLOT(graphFresh()));
+#ifdef NO_BOARD
     connect(dataTimer, SIGNAL(timeout()), this, SLOT(getDataFromBoard()));
+#endif
     connect(impTimer, SIGNAL(timeout()), this, SLOT(getImpedanceFromBoard()));
     connect(ui->actionStart_Recording, SIGNAL(triggered()), SLOT(createTempTXT()));
     connect(ui->actionEDF, SIGNAL(triggered()), SLOT(saveEDF()));
@@ -90,7 +86,9 @@ MainWindow::~MainWindow()
     delete []axisY;
     delete []channelNames;
     delete graphTimer;
+#ifdef NO_BOARD
     delete dataTimer;
+#endif
     delete impTimer;
     delete ui;
 }
@@ -99,9 +97,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if(this->isFinish == 0)
     {
-        QMessageBox::critical(this, tr("错误"),
-                                        "EDF文件正在写入！",
-                                        QMessageBox::Ok);
+        QMessageBox::critical(this, tr("错误"), "EDF文件正在写入！", QMessageBox::Ok);
         event->ignore();
     }
     else
@@ -131,8 +127,8 @@ Retry:
     }else{
         siw->close();
     }
-    ui->label_6->setText(this->participantNum);
-    tempFiles += (this->participantNum.toStdString()+'_'+this->date.toStdString()+'_'+this->others.toStdString());
+    ui->label_6->setText(participantNum);
+    tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
     delete siw;
 }
 
@@ -157,14 +153,14 @@ void MainWindow::createTempTXT()
 }
 
 /*设置文件保存的路径*/
-void MainWindow::setFilePath(int s, std::string &path)
+void MainWindow::setFilePath(int s, std::string path)
 {
     //新建对话框获取EDF文件放置的绝对地址
     path = QFileDialog::getExistingDirectory(this, tr("文件保存路径选择"),
                                                  "/home",
                                                  QFileDialog::ShowDirsOnly
                                                  | QFileDialog::DontResolveSymlinks).toStdString();
-    path += ("/"+this->participantNum.toStdString()+'_'+this->date.toStdString()+'_'+this->others.toStdString());
+    path += ("/"+participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
     QString q = QString::fromStdString(path);
     q.replace("/", "\\");
     path = q.toStdString();
@@ -214,13 +210,13 @@ void MainWindow::saveEDF()
         QMessageBox::critical(this, tr("错误"), "数据未记录，无法导出！", QMessageBox::Ok);
         return;
     }
-    this->isFinish = 0;
+    isFinish = 0;
     int i, col = 0;
     std::string edf_path;
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ifstream events_read;  // 标记缓存txt文件输入流
     double *buf_persec = new double[CHANNELS * SAMPLE_RATE];
-    std::string file_name = this->participantNum.toStdString()+'_'+this->date.toStdString()+'_'+this->others.toStdString();
+    std::string file_name = participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString();
     setFilePath(0, edf_path);
     //新建文件夹
     QDir dir;
@@ -294,10 +290,10 @@ void MainWindow::saveEDF()
     //关闭edf文件
     edfclose_file(flag);
     /*保存行为学数据*/
-    if(this->isSaveP300BH)
+    if(isSaveP300BH)
         saveBehavioralP300(edf_path);
     //EDF文件写入完成
-    this->isFinish = 1;
+    isFinish = 1;
 }
 
 /*保存为3个txt文档（样本数据点，事件信息，描述文档）*/
@@ -310,9 +306,9 @@ void MainWindow::saveTXT()
         QMessageBox::critical(this, tr("错误"), "数据未记录，无法导出！", QMessageBox::Ok);
         return;
     }
-    this->isFinish = 0;
+    isFinish = 0;
     std::string txt_path;
-    std::string file_name = this->participantNum.toStdString()+'_'+this->date.toStdString()+'_'+this->others.toStdString();
+    std::string file_name = participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString();
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ofstream samples_txt;  // 数据点txt文件输出流
     std::ifstream events_read;
@@ -411,9 +407,9 @@ void MainWindow::saveTXT()
     readme << "Time unit(sec): 1" << std::endl;
     readme.close();
     /*保存行为学数据*/
-    if(this->isSaveP300BH)
+    if(isSaveP300BH)
         saveBehavioralP300(txt_path);
-    this->isFinish = 1;
+    isFinish = 1;
 }
 
 /*保存行为学数据*/
@@ -487,19 +483,19 @@ void MainWindow::saveBehavioralP300(std::string path)
         }
     }
     events_read.close();
-    std::string file_name = this->participantNum.toStdString()+'_'+this->date.toStdString()+'_'+this->others.toStdString();
+    std::string file_name = participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString();
     std::ofstream beh_file;
     beh_file.open(path + "\\" + file_name + "_behavioral.csv");
     beh_file.close();
     beh_file.open(path + "\\" + file_name + "_behavioral.csv", std::ios::app);
-    beh_file << "Experiment Name: " << this->expName.toStdString()
+    beh_file << "Experiment Name: " << expName.toStdString()
              << ", Date: " << QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss").toStdString()
              << std::endl;
     beh_file << "Subject,Trial,blank.ACC,blank.CRESP,blank.OnsetTime,blank.RESP,blank.RT,blank.RTTime,code,correct,pic" << std::endl;
     //预实验
     for(int i = 0; i < 40; i++)
     {
-        std::string pre_exp = this->participantNum.toStdString() + "," + std::to_string(i + 1);
+        std::string pre_exp = participantNum.toStdString() + "," + std::to_string(i + 1);
         for(int j = 0; j < 9; j++)
         {
             pre_exp += ",";
@@ -510,7 +506,7 @@ void MainWindow::saveBehavioralP300(std::string path)
     for(int i = 0; i < 200; i++)
     {
         //Subject
-        beh_file << this->participantNum.toStdString();
+        beh_file << participantNum.toStdString();
         beh_file << ",";
         //Trial
         beh_file << std::to_string(i + 1);
@@ -577,7 +573,7 @@ void MainWindow::createMark(const std::string event)
     marks[line] = std::make_pair(QDateTime::currentDateTime().toMSecsSinceEpoch(), pItem);
     //marks[line] = std::make_pair(threshold - 1, pItem);
     /*将marker写入文件*/
-    if(this->isRec)
+    if(isRec)
     {
         eventCount++;
         double secs = 10000 * curLine / SAMPLE_RATE;
@@ -697,7 +693,9 @@ void MainWindow::getImpedanceFromBoard()
 {
     for(int i = 0; i < CHANNELS; i++)
     {
+    #ifdef NO_BOARD
         impedance[i] = 500.0 * rand() / (RAND_MAX);
+    #endif
         if(impedance[i] >= 490)
             impedance[i] = -1;  // 阻抗无穷大
     }
@@ -708,35 +706,46 @@ void MainWindow::getDataFromBoard()
 {
     for(int i = 0; i < CHANNELS; i++)
     {
+    #ifdef NO_BOARD
         originalData[i] = 45 * sin(msecCnt * (2 * 3.1415926535 / 10)) + (rand() % 10 - 5);
-        if(this->isFilt)
+    #endif
+        if(isFilt)
         {
             Filter f;
-            /*原始数据进入带通滤波器缓冲区*/
-            if(bandPassBufLen[i] < FILTER_ORDER + 1)
+            /*原始数据进入带通滤波缓冲区*/
+            if(bandPassBuffer[i].size() < FILTER_ORDER + 1)
             {
-                bandPassBuffer[i][bandPassBufLen[i]++] = originalData[i];
+                bandPassBuffer[i].enqueue(originalData[i]);
             }
             /*带通滤波*/
             else
             {
-                bandPassBufLen[i] = 0;
+                /*计算带通滤波器冲激响应*/
+                double y_n;
                 double *cur_bp_h = new double[FILTER_ORDER + 1];
                 bandPassCoff[i] = cur_bp_h;
                 f.countBandPassCoef(FILTER_ORDER, SAMPLE_RATE, cur_bp_h, lowCut, highCut);
-                conv(BandPass, i);
-            }
-            /*陷波*/
-            if(notchBufLen[i] >= FILTER_ORDER + 1)
-            {
-                notchBufLen[i] = 0;
-                double *cur_n_h = new double[FILTER_ORDER + 1];
-                notchCoff[i] = cur_n_h;
-                f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
-                conv(Notch, i);
+                /*计算滤波后的值*/
+                y_n = conv(BandPass, i);
+                /*队列左移一位*/
+                bandPassBuffer[i].dequeue();
+                /*滤波后的值入队*/
+                bandPassBuffer[i].enqueue(y_n);
+                if(notchBuffer[i].size() < FILTER_ORDER + 1)
+                    notchBuffer[i].enqueue(y_n);
+                else
+                {   /*陷波*/
+                    double *cur_n_h = new double[FILTER_ORDER + 1];
+                    notchCoff[i] = cur_n_h;
+                    f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
+                    y_n = conv(Notch, i);
+                    notchBuffer[i].dequeue();
+                    notchBuffer[i].enqueue(y_n);
+                }
+                filtData[i] = y_n;
             }
         }
-        if(this->isRec)
+        if(isRec)
         {
             /*写入缓存txt文件*/
             if(i < CHANNELS - 1)
@@ -750,7 +759,7 @@ void MainWindow::getDataFromBoard()
 }
 
 /*时域序列卷积*/
-void MainWindow::conv(filt type, int index)
+double MainWindow::conv(filt type, int index)
 {
     double y_n = 0.0;
     if(type == BandPass)
@@ -759,8 +768,6 @@ void MainWindow::conv(filt type, int index)
         {
             y_n += bandPassCoff[index][k] * bandPassBuffer[index][FILTER_ORDER - k];
         }
-        /*带通滤波后的数据进入陷波缓冲区*/
-        notchBuffer[index][notchBufLen[index]++] = y_n;
     }
     else
     {
@@ -768,15 +775,15 @@ void MainWindow::conv(filt type, int index)
         {
             y_n += notchCoff[index][k] * notchBuffer[index][FILTER_ORDER - k];
         }
-        filtData[index] = y_n;
     }
+    return y_n;
 }
 
 /*图像刷新*/
 void MainWindow::graphFresh()
 {
     /*波形刷新*/
-    this->isFilt ? updateWave(filtData) : updateWave(originalData);
+    isFilt ? updateWave(filtData) : updateWave(originalData);
     /*在图形上绘制红色铅直线标记marker*/
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
     for(iter = marks.begin(); iter != marks.end(); iter++)
@@ -793,17 +800,17 @@ void MainWindow::graphFresh()
     {
         background color;  // 背景色（0-20绿色，20-100黄色，100以上红色）
         QString text;
-        if(this->impedance[i] < 0)
+        if(impedance[i] < 0)
         {
             text = "Inf";
             color = Red;
         }
         else
         {
-            text = QString::number(this->impedance[i]);
-            if(this->impedance[i] <= 20)
+            text = QString::number(impedance[i]);
+            if(impedance[i] <= 20)
                 color = Green;
-            else if(this->impedance[i] > 20 && this->impedance[i] <= 100)
+            else if(impedance[i] > 20 && impedance[i] <= 100)
                 color = Yellow;
             else
                 color = Red;
@@ -888,7 +895,7 @@ void MainWindow::graphFresh()
 /*停止写入数据并保存缓存txt文件*/
 void MainWindow::stopRec()
 {
-  this->isRec = false;
+  isRec = false;
   //关闭txt文件输入流
   samplesWrite.close();
   eventsWrite.close();
@@ -907,7 +914,7 @@ void MainWindow::p300Oddball()
                                     QMessageBox::Ok);
     if(reply == QMessageBox::Ok)
     {
-        this->isSaveP300BH = true;
+        isSaveP300BH = true;
         //进入实验
         P300Oddball *p = new P300Oddball();
         connect(p, SIGNAL(sendMark(const std::string)), this, SLOT(createMark(const std::string)));
@@ -920,115 +927,115 @@ void MainWindow::on_lineEdit_editingFinished()
 {
     QString m = ui->lineEdit->text();
     if(!m.isEmpty())
-        this->markerNames[0] = m.toStdString();
+        markerNames[0] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_2_editingFinished()
 {
     QString m = ui->lineEdit_2->text();
     if(!m.isEmpty())
-        this->markerNames[1] = m.toStdString();
+        markerNames[1] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_3_editingFinished()
 {
     QString m = ui->lineEdit_3->text();
     if(!m.isEmpty())
-        this->markerNames[2] = m.toStdString();
+        markerNames[2] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_4_editingFinished()
 {
     QString m = ui->lineEdit_4->text();
     if(!m.isEmpty())
-        this->markerNames[3] = m.toStdString();
+        markerNames[3] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_5_editingFinished()
 {
     QString m = ui->lineEdit_5->text();
     if(!m.isEmpty())
-        this->markerNames[4] = m.toStdString();
+        markerNames[4] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_6_editingFinished()
 {
     QString m = ui->lineEdit_6->text();
     if(!m.isEmpty())
-        this->markerNames[5] = m.toStdString();
+        markerNames[5] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_7_editingFinished()
 {
     QString m = ui->lineEdit_7->text();
     if(!m.isEmpty())
-        this->markerNames[6] = m.toStdString();
+        markerNames[6] = m.toStdString();
 }
 
 void MainWindow::on_lineEdit_8_editingFinished()
 {
     QString m = ui->lineEdit_8->text();
     if(!m.isEmpty())
-        this->markerNames[7] = m.toStdString();
+        markerNames[7] = m.toStdString();
 }
 
 void MainWindow::on_pushButton_2_clicked()
 {
-    createMark(this->markerNames[0]);
+    createMark(markerNames[0]);
 }
 
 void MainWindow::on_pushButton_3_clicked()
 {
-    createMark(this->markerNames[1]);
+    createMark(markerNames[1]);
 }
 
 void MainWindow::on_pushButton_4_clicked()
 {
-    createMark(this->markerNames[2]);
+    createMark(markerNames[2]);
 }
 
 void MainWindow::on_pushButton_5_clicked()
 {
-    createMark(this->markerNames[3]);
+    createMark(markerNames[3]);
 }
 
 void MainWindow::on_pushButton_6_clicked()
 {
-    createMark(this->markerNames[4]);
+    createMark(markerNames[4]);
 }
 
 void MainWindow::on_pushButton_7_clicked()
 {
-    createMark(this->markerNames[5]);
+    createMark(markerNames[5]);
 }
 
 void MainWindow::on_pushButton_8_clicked()
 {
-    createMark(this->markerNames[6]);
+    createMark(markerNames[6]);
 }
 
 void MainWindow::on_pushButton_9_clicked()
 {
-    createMark(this->markerNames[7]);
+    createMark(markerNames[7]);
 }
 
 /*选择带通滤波、凹陷滤波频率*/
 void MainWindow::on_comboBox_currentIndexChanged(int index)
 {
     if(index != 0)
-        this->lowCut = this->highPassFres[index - 1];
+        lowCut = highPassFres[index - 1];
 }
 
 void MainWindow::on_comboBox_2_currentIndexChanged(int index)
 {
     if(index != 0)
-        this->highCut = this->lowPassFres[index - 1];
+        highCut = lowPassFres[index - 1];
 }
 
 void MainWindow::on_comboBox_3_currentIndexChanged(int index)
 {
     if(index != 0)
-    this->notchCut = ((index == 1) ? 50.0 : 60.0);
+        notchCut = ((index == 1) ? 50.0 : 60.0);
 }
 
 /*按了"滤波"按钮后开始滤波*/
@@ -1042,6 +1049,6 @@ void MainWindow::on_filter_clicked()
             return;
         }
         /*滤波*/
-        this->isFilt = true;
+        isFilt = true;
     }
 }

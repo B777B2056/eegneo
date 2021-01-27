@@ -28,6 +28,8 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+#define NO_BOARD  // 没板子宏
+
 #define CHANNELS 8  // 数据通道为8通道
 #define SAMPLE_RATE 50  // 采样率
 #define MAX_VOLTAGE 50.0  // EDF文件各通道最大电压值
@@ -113,9 +115,11 @@ private slots:
 
     void graphFresh();  // 触发图像更新
 
+#ifdef NO_BOARD
     void getDataFromBoard();  // 获取实时更新的EEG数据
 
     void getImpedanceFromBoard();  // 获取各导阻抗，截断原始的double类型数据(没有板子之前用槽函数产生随机数代替)
+#endif
 
     void stopRec();  // 停止写入数据并保存缓存txt文件
 
@@ -128,8 +132,12 @@ private slots:
     void p300Oddball();  // oddball范式p300实验
 
 private:
+#ifdef NO_BOARD
     /*正弦波测试*/
     int msecCnt = 0;
+    /*测试数据更新定时器*/
+    QTimer *dataTimer;
+#endif
 
     /*与被试信息相关的私有成员*/
     QString participantNum, date, others, expName;  // 被试信息
@@ -139,15 +147,14 @@ private:
     QTimer *impTimer;
 
     /*与滤波相关的私有成员*/
-    int *bandPassBufLen, *notchBufLen;  // 判断原始数据缓冲区长度
     bool isFilt;  // 是否进行滤波
     double lowCut, highCut, notchCut;  // 被选好的高通、低通滤波、凹陷滤波频率
     double highPassFres[7] = {0.1, 0.3, 3.5, 8.0, 12.5, 16.5, 20.5};  // 高通滤波频率选择
     double lowPassFres[7] = {8.0, 12.5, 16.5, 20.5, 28.0, 45.0, 50.0};  // 低通滤波频率选择
-    std::array<std::array<double, FILTER_ORDER + 1>, CHANNELS> bandPassBuffer, notchBuffer;  // 滤波时8通道数据缓存区，长度为滤波器阶数
+    std::array<QQueue<double>, CHANNELS> bandPassBuffer, notchBuffer;  // 滤波时8通道数据缓存区，长度为滤波器阶数
     std::array<double *, CHANNELS> bandPassCoff, notchCoff;  // FIR I型带通滤波器与陷波器冲激响应
     double *filtData;  // 滤波后输入图像的数据
-    void conv(filt type, int index);  // 卷积计算
+    double conv(filt type, int index);  // 卷积计算
 
     /*与Marker相关的私有成员*/
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>> marks;
@@ -167,8 +174,10 @@ private:
 
     /*与数据获取有关的私有成员*/
     double *originalData;  // 8个通道的原始数据
-    QTimer *dataTimer;  // 数据更新定时器
-    // void getDataFromBoard();  // 从单片机获取数据
+#ifndef NO_BOARD
+    void getDataFromBoard();  // 从单片机获取数据
+    void getImpedanceFromBoard();  // 获取各导阻抗，截断原始的double类型数据为int
+#endif
 
     /*与文件保存有关的私有成员*/
     int eventCount;
@@ -183,7 +192,7 @@ private:
     std::ofstream eventsWrite;  // 标记缓存txt文件输出流
     std::string tempFiles;
     std::string *channelNames;  // 通道名称
-    void setFilePath(int s, std::string &path);  // 设置文件保存的路径
+    void setFilePath(int s, std::string path);  // 设置文件保存的路径
     void saveBehavioralP300(std::string path);  // 保存行为学数据
 
     /*UI*/
