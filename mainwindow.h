@@ -33,7 +33,7 @@ QT_END_NAMESPACE
 #define MAX_VOLTAGE 50.0  // EDF文件各通道最大电压值
 #define MIN_VOLTAGE -10.0  // EDF文件各通道最小电压值
 #define TIME_INTERVAL 5  // 波形显示的时间间隔，单位为s
-#define GRAPH_FRESH 50  // 触发波形显示定时器的时间，单位为ms
+#define GRAPH_FRESH 30  // 触发波形显示定时器的时间，单位为ms
 #define DATA_FRESH 20 // 触发数据更新定时器的时间，单位为ms
 #define IMPEDANCE_FRESH 2000  // 2s刷新一次阻抗
 #define MANUAL_MAKER 8 // 手动Mark数量
@@ -47,6 +47,8 @@ enum background
 enum filt
 {BandPass, Notch};
 
+void globalInit(int cn);
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -55,7 +57,7 @@ protected:
      void closeEvent(QCloseEvent *event);
 
 public:
-    MainWindow(QString participantNum, QString date, QString others, QString expName, int channel_num, QWidget *parent = nullptr);
+    MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent = nullptr);
     ~MainWindow();
 
 public slots:

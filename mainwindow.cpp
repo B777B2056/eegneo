@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-MainWindow::MainWindow(QString participantNum, QString date, QString others, QString expName, int channel_num, QWidget *parent)
+MainWindow::MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent)
     : QMainWindow(parent)
     , isFilt(false), lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
     , maxVoltage(50), threshold(1000 * TIME_INTERVAL / GRAPH_FRESH)
@@ -13,7 +13,7 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     this->date = date;
     this->others = others;
     this->expName = expName;
-    this->channel_num = channel_num;
+    this->channel_num = cn;
     ui->label_6->setText(participantNum);
     tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
     /*电极数组初始化*/
@@ -419,7 +419,7 @@ void MainWindow::saveTXT()
 }
 
 /*保存行为学数据*/
-void MainWindow::saveBehavioralP300(const std::string path)
+void MainWindow::saveBehavioralP300(std::string path)
 {
     int col = 0;
     std::ifstream events_read;
@@ -605,6 +605,7 @@ void MainWindow::initChart()
         axisY[index]->setLabelFormat("%d");
         charts[index]->addAxis(axisY[index], Qt::AlignLeft);
         //链接数据
+        series[index]->setUseOpenGL(true);
         series[index]->append(QPointF(0, 0));
         charts[index]->addSeries(series[index]);
         QPen splinePen;
@@ -616,16 +617,15 @@ void MainWindow::initChart()
         charts[index]->setAxisY(axisY[index], series[index]);
         charts[index]->legend()->hide();
         charts[index]->setTheme(QChart::ChartThemeLight);
-        charts[index]->setMargins({-20, 0, 0, -10});
+        charts[index]->setMargins({-10, 0, 0, -10});
         charts[index]->axisX()->setGridLineVisible(false);
         charts[index]->axisY()->setGridLineVisible(false);
         montages[index]->setChart(charts[index]);
-        //设置界面布局
-        impDisplay[index]->setMinimumWidth(55);
+        montages[index]->setMaximumSize(QSize(761, 75));
         QLabel *num = new QLabel(this);
         num->setText(QString::number(index + 1));
         num->setMinimumSize(QSize(15, 15));
-        num->setMaximumSize(QSize(20,20));
+        num->setMaximumSize(QSize(20, 20));
         QWidget *widget = new QWidget(ui->listWidget);
         QHBoxLayout *horLayout = new QHBoxLayout;
         horLayout->setContentsMargins(0, 0, 0, 0);
@@ -636,7 +636,7 @@ void MainWindow::initChart()
         horLayout->addWidget(impDisplay[index]);
         widget->setLayout(horLayout);
         QListWidgetItem* item = new QListWidgetItem(ui->listWidget);
-        item->setSizeHint(QSize(870, 80));
+        item->setSizeHint(QSize(860, 75));
         ui->listWidget->setItemWidget(item, widget);
     }
 }
@@ -757,7 +757,7 @@ void MainWindow::getDataFromBoard()
 }
 
 /*时域序列卷积*/
-double MainWindow::conv(const filt type, const int index)
+double MainWindow::conv(filt type, int index)
 {
     double y_n = 0.0;
     if(type == BandPass)

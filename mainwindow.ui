@@ -908,6 +908,8 @@
     <property name="title">
      <string>在线分析</string>
     </property>
+    <addaction name="actionBEAM"/>
+    <addaction name="actionBrainNetwork"/>
    </widget>
    <widget class="QMenu" name="menu_5">
     <property name="title">
@@ -998,6 +1000,16 @@
   <action name="action32">
    <property name="text">
     <string>32</string>
+   </property>
+  </action>
+  <action name="actionBEAM">
+   <property name="text">
+    <string>绘制地形图</string>
+   </property>
+  </action>
+  <action name="actionBrainNetwork">
+   <property name="text">
+    <string>脑网络分析</string>
    </property>
   </action>
  </widget>
