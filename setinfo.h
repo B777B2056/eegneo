@@ -20,7 +20,7 @@ public:
     ~SetInfo();
 
     void setMainWindow(QWidget *mainwindiw) { this->mainwindiw = mainwindiw; }
-    void getInfo(QString& num_info, QString& date_info, QString& other_info, QString& exp_name);
+    void getInfo(QString& num_info, QString& date_info, QString& other_info, QString& exp_name, int& motange_num);
 
 private slots:
 
@@ -32,8 +32,10 @@ private slots:
 
     void on_exp_name_editingFinished();
 
+    void on_comboBox_currentIndexChanged(int index);
 private:
     QWidget *mainwindiw;
+    int motange_num;
     QString num_info, date_info, other_info, exp_name;  // 被试信息
 
     Ui::set_info *ui;

@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(QString participantNum, QString date, QString others, QString expName, int channel_num, QWidget *parent)
     : QMainWindow(parent)
     , isFilt(false), lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
     , maxVoltage(50), threshold(1000 * TIME_INTERVAL / GRAPH_FRESH)
@@ -9,17 +9,55 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    this->participantNum = participantNum;
+    this->date = date;
+    this->others = others;
+    this->expName = expName;
+    this->channel_num = channel_num;
+    ui->label_6->setText(participantNum);
+    tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
+    /*电极数组初始化*/
+    montages[0] = ui->wave;
+    montages[1] = ui->wave_2;
+    montages[2] = ui->wave_3;
+    montages[3] = ui->wave_4;
+    montages[4] = ui->wave_5;
+    montages[5] = ui->wave_6;
+    montages[6] = ui->wave_7;
+    montages[7] = ui->wave_8;
+    montages[8] = ui->wave_9;
+    montages[9] = ui->wave_10;
+    montages[10] = ui->wave_11;
+    montages[11] = ui->wave_12;
+    montages[12] = ui->wave_13;
+    montages[13] = ui->wave_14;
+    montages[14] = ui->wave_15;
+    montages[15] = ui->wave_16;
+    if(channel_num == 8)
+    {
+        for(int i = 8; i < 16; i++)
+            montages[i]->hide();
+    }
     /*动态分配内存*/
-    impedance = new int[CHANNELS];
-    filtData = new double[CHANNELS];
     markerNames = new std::string[MANUAL_MAKER];
-    pointQueue = new QQueue<QPointF>[CHANNELS];
-    series = new  QSplineSeries[CHANNELS];
-    axisX = new QDateTimeAxis[CHANNELS];
-    axisY = new QValueAxis[CHANNELS];
-    charts = new QChart[CHANNELS];
-    originalData = new double[CHANNELS];
-    channelNames = new std::string[CHANNELS];
+    /*初始化vector*/
+    for(int i = 0; i < channel_num; i++)
+    {
+        impedance.push_back(0);
+        filtData.push_back(0.0);
+        originalData.push_back(0.0);
+        channelNames.push_back("");
+        pointQueue.push_back(QQueue<QPointF>());
+        bandPassBuffer.push_back(QQueue<double>());
+        notchBuffer.push_back(QQueue<double>());
+        bandPassCoff.push_back(new double[channel_num]);
+        notchCoff.push_back(new double[channel_num]);
+        impDisplay.push_back(new QLabel(this));
+        series.push_back(new QSplineSeries);
+        axisX.push_back(new QDateTimeAxis);
+        axisY.push_back(new QValueAxis);
+        charts.push_back(new QChart);
+    }
     /*定时器初始化*/
     graphTimer = new QTimer(this);
     graphTimer->setInterval(GRAPH_FRESH);//设置定时周期，单位：毫秒
@@ -70,21 +108,17 @@ MainWindow::~MainWindow()
     marks.clear();
     for(std::size_t i = 0; i < qls.size(); i++)
         delete qls[i];
-    for(int i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
         delete []bandPassCoff[i];
         delete []notchCoff[i];
+        delete impDisplay[i];
+        delete series[i];
+        delete axisX[i];
+        delete axisY[i];
+        delete charts[i];
     }
     delete []markerNames;
-    delete []originalData;
-    delete []filtData;
-    delete []impedance;
-    delete []series;
-    delete []pointQueue;
-    delete []charts;
-    delete []axisX;
-    delete []axisY;
-    delete []channelNames;
     delete graphTimer;
 #ifdef NO_BOARD
     delete dataTimer;
@@ -104,34 +138,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
         event->accept();
 }
 
-/*设置被试基本信息子窗口*/
-void MainWindow::setInfo(){
-    SetInfo *siw = new SetInfo;
-    siw->setMainWindow(this);
-Retry:
-    int rec = siw->exec();
-    siw->getInfo(participantNum, date, others, expName);
-    if(rec == QDialog::Accepted){
-        if(participantNum.isEmpty() || date.isEmpty() || expName.isEmpty()){
-            /*被试信息必须项缺失，弹出错误信息后返回*/
-            QMessageBox::StandardButton reply;
-            reply = QMessageBox::critical(this, tr("错误"),
-                                            "被试信息缺失！\n请检查被试编号、日期与实验名称。",
-                                            QMessageBox::Retry | QMessageBox::Abort);
-            if (reply == QMessageBox::Abort){
-                siw->close();
-            }else{
-                goto Retry;
-            }
-        }
-    }else{
-        siw->close();
-    }
-    ui->label_6->setText(participantNum);
-    tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
-    delete siw;
-}
-
 /*创建缓存TXT文件*/
 void MainWindow::createTempTXT()
 {
@@ -140,9 +146,9 @@ void MainWindow::createTempTXT()
     eventsWrite.open(tempFiles + "_events.txt");
     eventsWrite.close();
     samplesWrite.open(tempFiles + "_samples.txt", std::ios::app);
-    for(int i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
-        if(i < 7)
+        if(i < channel_num - 1)
             samplesWrite << i + 1 << " ";
         else
             samplesWrite << i + 1 << std::endl;
@@ -153,7 +159,7 @@ void MainWindow::createTempTXT()
 }
 
 /*设置文件保存的路径*/
-void MainWindow::setFilePath(int s, std::string path)
+void MainWindow::setFilePath(int s, std::string& path)
 {
     //新建对话框获取EDF文件放置的绝对地址
     path = QFileDialog::getExistingDirectory(this, tr("文件保存路径选择"),
@@ -178,7 +184,7 @@ void MainWindow::setFilePath(int s, std::string path)
             int rec = scl.exec();
             if(rec == QDialog::Accepted)
             {
-                for(int i = 0; i < CHANNELS; i++)
+                for(int i = 0; i < channel_num; i++)
                     channelNames[i] = scl.names[i].toStdString();
             }
             else
@@ -188,14 +194,14 @@ void MainWindow::setFilePath(int s, std::string path)
         }
         else{
             /*各通道默认标签*/
-            for(int i = 0; i < CHANNELS; i++)
+            for(int i = 0; i < channel_num; i++)
                 channelNames[i] = std::to_string(i + 1);
         }
     }
     else
     {
         /*各通道默认标签*/
-        for(int i = 0; i < CHANNELS; i++)
+        for(int i = 0; i < channel_num; i++)
             channelNames[i] = std::to_string(i + 1);
     }
 }
@@ -215,7 +221,7 @@ void MainWindow::saveEDF()
     std::string edf_path;
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ifstream events_read;  // 标记缓存txt文件输入流
-    double *buf_persec = new double[CHANNELS * SAMPLE_RATE];
+    double *buf_persec = new double[channel_num * SAMPLE_RATE];
     std::string file_name = participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString();
     setFilePath(0, edf_path);
     //新建文件夹
@@ -226,8 +232,8 @@ void MainWindow::saveEDF()
 
     }
     //设置EDF文件参数
-    flag = edfopen_file_writeonly((edf_path + "\\" + file_name + ".edf").c_str(), EDFLIB_FILETYPE_EDFPLUS, CHANNELS);
-    for(i = 0; i < CHANNELS; i++)
+    flag = edfopen_file_writeonly((edf_path + "\\" + file_name + ".edf").c_str(), EDFLIB_FILETYPE_EDFPLUS, channel_num);
+    for(i = 0; i < channel_num; i++)
     {
         //设置各通道采样率
         edf_set_samplefrequency(flag, i, SAMPLE_RATE);
@@ -255,7 +261,7 @@ void MainWindow::saveEDF()
             std::stringstream ss(str);
             for(int row = 0; row < SAMPLE_RATE; row++)
             {
-              if(SAMPLE_RATE * row + col < CHANNELS * SAMPLE_RATE)
+              if(SAMPLE_RATE * row + col < channel_num * SAMPLE_RATE)
                   ss >> buf_persec[SAMPLE_RATE * row + col];
             }
             /*1s结束*/
@@ -268,7 +274,7 @@ void MainWindow::saveEDF()
         ++col;
     }
     /*写入多余的空数据以保证标记存在*/
-    for(i = 0; i < CHANNELS * SAMPLE_RATE; i++)
+    for(i = 0; i < channel_num * SAMPLE_RATE; i++)
        buf_persec[i] = 0.0;
     for(i = 0; i < eventCount - curLine / SAMPLE_RATE + 1; i++)
         edf_blockwrite_physical_samples(flag, buf_persec);
@@ -328,9 +334,9 @@ void MainWindow::saveTXT()
     samples_txt.close();
     samples_read.open(tempFiles + "_samples.txt");
     samples_txt.open(txt_path + "\\" + file_name + "_samples.txt", std::ios::app);
-    for(std::size_t i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
-        if(i < CHANNELS - 1)
+        if(i < channel_num - 1)
             samples_txt << channelNames[i] << " ";
         else
             samples_txt << channelNames[i] << std::endl;
@@ -401,7 +407,7 @@ void MainWindow::saveTXT()
     readme.close();
     readme.open(txt_path + "\\" + file_name + "_readme.txt", std::ios::app);
     readme << "Data sampling rate: " << SAMPLE_RATE << std::endl;
-    readme << "Number of channels: " << CHANNELS << std::endl;
+    readme << "Number of channels: " << channel_num << std::endl;
     readme << "Input field(column) names: latency type" << std::endl;
     readme << "Number of file header lines: 1" << std::endl;
     readme << "Time unit(sec): 1" << std::endl;
@@ -413,7 +419,7 @@ void MainWindow::saveTXT()
 }
 
 /*保存行为学数据*/
-void MainWindow::saveBehavioralP300(std::string path)
+void MainWindow::saveBehavioralP300(const std::string path)
 {
     int col = 0;
     std::ifstream events_read;
@@ -564,11 +570,11 @@ void MainWindow::createMark(const std::string event)
     splinePen.setBrush(Qt::red);
     splinePen.setColor(Qt::red);
     line->setPen(splinePen);
-    charts[0].addSeries(line);
-    charts[0].setAxisX(&axisX[0], line);
-    charts[0].setAxisY(&axisY[0], line);
+    charts[0]->addSeries(line);
+    charts[0]->setAxisX(axisX[0], line);
+    charts[0]->setAxisY(axisY[0], line);
     /*添加marker文字注释*/
-    QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(&charts[0]);
+    QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(charts[0]);
     pItem->setText(QString::fromStdString(event) + "\n" + QDateTime::currentDateTime().toString("hh:mm:ss"));
     marks[line] = std::make_pair(QDateTime::currentDateTime().toMSecsSinceEpoch(), pItem);
     //marks[line] = std::make_pair(threshold - 1, pItem);
@@ -585,113 +591,105 @@ void MainWindow::createMark(const std::string event)
 
 void MainWindow::initChart()
 {
-    for(int index = 0; index < CHANNELS; index++)
+    for(int index = 0; index < channel_num; index++)
     {
         //设置x轴
-        axisX[index].setRange(QDateTime::currentDateTime().addSecs(-TIME_INTERVAL), QDateTime::currentDateTime());
-        axisX[index].setTickCount(TIME_INTERVAL);
-        axisX[index].setFormat("hh:mm:ss");
-        charts[index].addAxis(&axisX[index], Qt::AlignBottom);
+        axisX[index]->setRange(QDateTime::currentDateTime().addSecs(-TIME_INTERVAL), QDateTime::currentDateTime());
+        axisX[index]->setTickCount(TIME_INTERVAL);
+        axisX[index]->setFormat("hh:mm:ss");
+        charts[index]->addAxis(axisX[index], Qt::AlignBottom);
         //设置y轴
-        axisY[index].setRange(-50, 50);
-        axisY[index].setTickCount(3);
-        axisY[index].setTitleText("Voltage/uV");
-        axisY[index].setLabelFormat("%d");
-        charts[index].addAxis(&axisY[index], Qt::AlignLeft);
+        axisY[index]->setRange(-50, 50);
+        axisY[index]->setTickCount(2);
+        axisY[index]->setTitleText("Voltage/uV");
+        axisY[index]->setLabelFormat("%d");
+        charts[index]->addAxis(axisY[index], Qt::AlignLeft);
         //链接数据
-        series[index].append(QPointF(0, 0));
-        charts[index].addSeries(&series[index]);
+        series[index]->append(QPointF(0, 0));
+        charts[index]->addSeries(series[index]);
         QPen splinePen;
         splinePen.setBrush(Qt::blue);
         splinePen.setColor(Qt::blue);
-        series[index].setPen(splinePen);
+        series[index]->setPen(splinePen);
         //设置界面显示
-        charts[index].setAxisX(&axisX[index], &series[index]);
-        charts[index].setAxisY(&axisY[index], &series[index]);
-        charts[index].legend()->hide();
-        charts[index].setTheme(QChart::ChartThemeLight);
-        charts[index].setMargins({-20, 0, 0, -10});
-        charts[index].axisX()->setGridLineVisible(false);
-        charts[index].axisY()->setGridLineVisible(false);
-        switch(index)
-        {
-            case 0:
-                ui->wave->setChart(&charts[index]);
-                break;
-            case 1:
-                ui->wave_2->setChart(&charts[index]);
-                break;
-            case 2:
-                ui->wave_3->setChart(&charts[index]);
-                break;
-            case 3:
-                ui->wave_4->setChart(&charts[index]);
-                break;
-            case 4:
-                ui->wave_5->setChart(&charts[index]);
-                break;
-            case 5:
-                ui->wave_6->setChart(&charts[index]);
-                break;
-            case 6:
-                ui->wave_7->setChart(&charts[index]);
-                break;
-            case 7:
-                ui->wave_8->setChart(&charts[index]);
-                break;
-        }
+        charts[index]->setAxisX(axisX[index], series[index]);
+        charts[index]->setAxisY(axisY[index], series[index]);
+        charts[index]->legend()->hide();
+        charts[index]->setTheme(QChart::ChartThemeLight);
+        charts[index]->setMargins({-20, 0, 0, -10});
+        charts[index]->axisX()->setGridLineVisible(false);
+        charts[index]->axisY()->setGridLineVisible(false);
+        montages[index]->setChart(charts[index]);
+        //设置界面布局
+        impDisplay[index]->setMinimumWidth(55);
+        QLabel *num = new QLabel(this);
+        num->setText(QString::number(index + 1));
+        num->setMinimumSize(QSize(15, 15));
+        num->setMaximumSize(QSize(20,20));
+        QWidget *widget = new QWidget(ui->listWidget);
+        QHBoxLayout *horLayout = new QHBoxLayout;
+        horLayout->setContentsMargins(0, 0, 0, 0);
+        horLayout->setMargin(0);
+        horLayout->setSpacing(0);
+        horLayout->addWidget(num);
+        horLayout->addWidget(montages[index]);
+        horLayout->addWidget(impDisplay[index]);
+        widget->setLayout(horLayout);
+        QListWidgetItem* item = new QListWidgetItem(ui->listWidget);
+        item->setSizeHint(QSize(870, 80));
+        ui->listWidget->setItemWidget(item, widget);
     }
 }
 
 /*设置Y轴范围*/
 void MainWindow::setVoltage50()
 {
-    for(int index = 0; index < CHANNELS; index++)
+    for(int index = 0; index < channel_num; index++)
     {
-        charts[index].axisY()->setRange(-50, 50);
+        charts[index]->axisY()->setRange(-50, 50);
     }
     maxVoltage = 50;
 }
 
 void MainWindow::setVoltage100()
 {
-    for(int index = 0; index < CHANNELS; index++)
+    for(int index = 0; index < channel_num; index++)
     {
-        charts[index].axisY()->setRange(-100, 100);
+        charts[index]->axisY()->setRange(-100, 100);
     }
     maxVoltage = 100;
 }
 
 void MainWindow::setVoltage200()
 {
-    for(int index = 0; index < CHANNELS; index++)
+    for(int index = 0; index < channel_num; index++)
     {
-        charts[index].axisY()->setRange(-200, 200);
+        charts[index]->axisY()->setRange(-200, 200);
     }
     maxVoltage = 200;
 }
 
 /*波形更新*/
-void MainWindow::updateWave(double *channelData)
+void MainWindow::updateWave(const std::vector<double>& channelData)
 {
     /*绘制波形*/
-    for(int index = 0; index < CHANNELS; index++)
+    for(int index = 0; index < channel_num; index++)
     {
         /*坐标轴刷新*/
-        charts[index].axisX()->setRange(QDateTime::currentDateTime().addSecs(-TIME_INTERVAL), QDateTime::currentDateTime());
+        charts[index]->axisX()->setRange(QDateTime::currentDateTime().addSecs(-TIME_INTERVAL), QDateTime::currentDateTime());
         if(pointQueue[index].size() >= threshold)
         {
             pointQueue[index].dequeue();
         }
         pointQueue[index].enqueue(QPointF(QDateTime::currentDateTime().toMSecsSinceEpoch(), channelData[index]));
-        series[index].replace(pointQueue[index]);
+        series[index]->replace(pointQueue[index]);
     }
 
 }
 
 void MainWindow::getImpedanceFromBoard()
 {
-    for(int i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
     #ifdef NO_BOARD
         impedance[i] = 500.0 * rand() / (RAND_MAX);
@@ -704,7 +702,7 @@ void MainWindow::getImpedanceFromBoard()
 /*数据获取，暂用随机数方式代替实际方法*/
 void MainWindow::getDataFromBoard()
 {
-    for(int i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
     #ifdef NO_BOARD
         originalData[i] = 45 * sin(msecCnt * (2 * 3.1415926535 / 10)) + (rand() % 10 - 5);
@@ -723,8 +721,8 @@ void MainWindow::getDataFromBoard()
                 /*计算带通滤波器冲激响应*/
                 double y_n;
                 double *cur_bp_h = new double[FILTER_ORDER + 1];
-                bandPassCoff[i] = cur_bp_h;
                 f.countBandPassCoef(FILTER_ORDER, SAMPLE_RATE, cur_bp_h, lowCut, highCut);
+                bandPassCoff[i] = cur_bp_h;
                 /*计算滤波后的值*/
                 y_n = conv(BandPass, i);
                 /*队列左移一位*/
@@ -736,8 +734,8 @@ void MainWindow::getDataFromBoard()
                 else
                 {   /*陷波*/
                     double *cur_n_h = new double[FILTER_ORDER + 1];
-                    notchCoff[i] = cur_n_h;
                     f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
+                    notchCoff[i] = cur_n_h;
                     y_n = conv(Notch, i);
                     notchBuffer[i].dequeue();
                     notchBuffer[i].enqueue(y_n);
@@ -748,7 +746,7 @@ void MainWindow::getDataFromBoard()
         if(isRec)
         {
             /*写入缓存txt文件*/
-            if(i < CHANNELS - 1)
+            if(i < channel_num - 1)
                 samplesWrite << originalData[i] << " ";
             else
                 samplesWrite << originalData[i] << std::endl;
@@ -759,7 +757,7 @@ void MainWindow::getDataFromBoard()
 }
 
 /*时域序列卷积*/
-double MainWindow::conv(filt type, int index)
+double MainWindow::conv(const filt type, const int index)
 {
     double y_n = 0.0;
     if(type == BandPass)
@@ -793,10 +791,10 @@ void MainWindow::graphFresh()
         marker_point.append(QPointF((iter->second).first, maxVoltage));
         iter->first->replace(marker_point);
         /*文字标记*/
-        (iter->second).second->setPos(charts[0].mapToPosition(QPointF((iter->second).first, 50.0), iter->first));
+        (iter->second).second->setPos(charts[0]->mapToPosition(QPointF((iter->second).first, 50.0), iter->first));
     }
     /*阻抗刷新*/
-    for(int i = 0; i < CHANNELS; i++)
+    for(int i = 0; i < channel_num; i++)
     {
         background color;  // 背景色（0-20绿色，20-100黄色，100以上红色）
         QString text;
@@ -807,7 +805,7 @@ void MainWindow::graphFresh()
         }
         else
         {
-            text = QString::number(impedance[i]);
+            text = QString::number(impedance[i]) + "KOhm";
             if(impedance[i] <= 20)
                 color = Green;
             else if(impedance[i] > 20 && impedance[i] <= 100)
@@ -815,80 +813,13 @@ void MainWindow::graphFresh()
             else
                 color = Red;
         }
-        switch (i) {
-            case 0:
-                ui->r_0->setText(text);
-                if(color == Green)
-                    ui->r_0->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_0->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_0->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 1:
-                ui->r_1->setText(text);
-                if(color == Green)
-                    ui->r_1->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_1->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_1->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 2:
-                ui->r_2->setText(text);
-                if(color == Green)
-                    ui->r_2->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_2->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_2->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 3:
-                ui->r_3->setText(text);
-                if(color == Green)
-                    ui->r_3->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_3->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_3->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 4:
-                ui->r_4->setText(text);
-                if(color == Green)
-                    ui->r_4->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_4->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_4->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 5:
-                ui->r_5->setText(text);
-                if(color == Green)
-                    ui->r_5->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_5->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_5->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 6:
-                ui->r_6->setText(text);
-                if(color == Green)
-                    ui->r_6->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_6->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_6->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-            case 7:
-                ui->r_7->setText(text);
-                if(color == Green)
-                    ui->r_7->setStyleSheet("QLabel{background:#00FF00;}");
-                else if(color == Yellow)
-                    ui->r_7->setStyleSheet("QLabel{background:#DAA520;}");
-                else
-                    ui->r_7->setStyleSheet("QLabel{background:#FF0000;}");
-                break;
-        }
+        impDisplay[i]->setText(text);
+        if(color == Green)
+            impDisplay[i]->setStyleSheet("QLabel{background:#00FF00;}");
+        else if(color == Yellow)
+            impDisplay[i]->setStyleSheet("QLabel{background:#DAA520;}");
+        else
+            impDisplay[i]->setStyleSheet("QLabel{background:#FF0000;}");
     }
 }
 
