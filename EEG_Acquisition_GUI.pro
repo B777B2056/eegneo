@@ -27,7 +27,8 @@ SOURCES += \
     mainwindow.cpp \
     p300.cpp \
     setchannelname.cpp \
-    setinfo.cpp
+    setinfo.cpp \
+    workthread.cpp
 
 HEADERS += \
     edflib.h \
@@ -35,7 +36,8 @@ HEADERS += \
     mainwindow.h \
     p300.h \
     setchannelname.h \
-    setinfo.h
+    setinfo.h \
+    workthread.h
 
 FORMS += \
     mainwindow.ui \

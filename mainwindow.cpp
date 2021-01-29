@@ -3,12 +3,16 @@
 
 MainWindow::MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent)
     : QMainWindow(parent)
-    , isFilt(false), lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
+    , lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
     , maxVoltage(50), threshold(1000 * TIME_INTERVAL / GRAPH_FRESH)
     , eventCount(0), curLine(0), isRec(false), isSaveP300BH(false), isFinish(-1), tempFiles("")
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    /*子线程初始化并开始*/
+    dataThread = new DataThread(cn);
+    dataThread->start();
+    /*被试信息初始化*/
     this->participantNum = participantNum;
     this->date = date;
     this->others = others;
@@ -44,14 +48,9 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     for(int i = 0; i < channel_num; i++)
     {
         impedance.push_back(0);
-        filtData.push_back(0.0);
-        originalData.push_back(0.0);
+        graphData.push_back(0.0);
         channelNames.push_back("");
         pointQueue.push_back(QQueue<QPointF>());
-        bandPassBuffer.push_back(QQueue<double>());
-        notchBuffer.push_back(QQueue<double>());
-        bandPassCoff.push_back(new double[channel_num]);
-        notchCoff.push_back(new double[channel_num]);
         impDisplay.push_back(new QLabel(this));
         series.push_back(new QSplineSeries);
         axisX.push_back(new QDateTimeAxis);
@@ -65,29 +64,23 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     impTimer = new QTimer(this);
     impTimer->setInterval(IMPEDANCE_FRESH);
     impTimer->start();
-#ifdef NO_BOARD
-    dataTimer = new QTimer(this);
-    dataTimer->setInterval(DATA_FRESH);
-    dataTimer->start();
-    /*随机数初始化*/
-    qsrand(QDateTime::currentDateTime().toTime_t());
-#endif
     /*绘图板初始化*/
     initChart();
     /*信号与槽的链接*/
     connect(graphTimer, SIGNAL(timeout()), this, SLOT(graphFresh()));
-#ifdef NO_BOARD
-    connect(dataTimer, SIGNAL(timeout()), this, SLOT(getDataFromBoard()));
-#endif
     connect(impTimer, SIGNAL(timeout()), this, SLOT(getImpedanceFromBoard()));
-    connect(ui->actionStart_Recording, SIGNAL(triggered()), SLOT(createTempTXT()));
-    connect(ui->actionEDF, SIGNAL(triggered()), SLOT(saveEDF()));
-    connect(ui->actionTXT, SIGNAL(triggered()), SLOT(saveTXT()));
-    connect(ui->actionStop_Recording, SIGNAL(triggered()), SLOT(stopRec()));
-    connect(ui->actionp300oddball, SIGNAL(triggered()), SLOT(p300Oddball()));
-    connect(ui->action50uV, SIGNAL(triggered()), SLOT(setVoltage50()));
-    connect(ui->action100uV, SIGNAL(triggered()), SLOT(setVoltage100()));
-    connect(ui->action200uV, SIGNAL(triggered()), SLOT(setVoltage200()));
+    connect(ui->actionStart_Recording, SIGNAL(triggered()), this, SLOT(createTempTXT()));
+    connect(ui->actionEDF, SIGNAL(triggered()), this, SLOT(saveEDF()));
+    connect(ui->actionTXT, SIGNAL(triggered()), this, SLOT(saveTXT()));
+    connect(ui->actionStop_Recording, SIGNAL(triggered()), this, SLOT(stopRec()));
+    connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
+    connect(ui->action50uV, SIGNAL(triggered()), this, SLOT(setVoltage50()));
+    connect(ui->action100uV, SIGNAL(triggered()), this, SLOT(setVoltage100()));
+    connect(ui->action200uV, SIGNAL(triggered()), this, SLOT(setVoltage200()));
+    connect(dataThread, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
+    connect(this, SIGNAL(doFilt(int, int, int)), dataThread, SLOT(startFilt(int, int, int)));
+    connect(this, SIGNAL(doRec(std::string)), dataThread, SLOT(startRec(std::string)));
+    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));
 }
 
 MainWindow::~MainWindow()
@@ -110,8 +103,6 @@ MainWindow::~MainWindow()
         delete qls[i];
     for(int i = 0; i < channel_num; i++)
     {
-        delete []bandPassCoff[i];
-        delete []notchCoff[i];
         delete impDisplay[i];
         delete series[i];
         delete axisX[i];
@@ -120,9 +111,6 @@ MainWindow::~MainWindow()
     }
     delete []markerNames;
     delete graphTimer;
-#ifdef NO_BOARD
-    delete dataTimer;
-#endif
     delete impTimer;
     delete ui;
 }
@@ -141,21 +129,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 /*创建缓存TXT文件*/
 void MainWindow::createTempTXT()
 {
-    samplesWrite.open(tempFiles + "_samples.txt");
-    samplesWrite.close();
     eventsWrite.open(tempFiles + "_events.txt");
     eventsWrite.close();
-    samplesWrite.open(tempFiles + "_samples.txt", std::ios::app);
-    for(int i = 0; i < channel_num; i++)
-    {
-        if(i < channel_num - 1)
-            samplesWrite << i + 1 << " ";
-        else
-            samplesWrite << i + 1 << std::endl;
-    }
     eventsWrite.open(tempFiles + "_events.txt", std::ios::app);
     eventsWrite << "latency type" << std::endl;
     isRec = true;
+    emit doRec(tempFiles + "_samples.txt");
 }
 
 /*设置文件保存的路径*/
@@ -165,7 +144,7 @@ void MainWindow::setFilePath(int s, std::string& path)
     path = QFileDialog::getExistingDirectory(this, tr("文件保存路径选择"),
                                                  "/home",
                                                  QFileDialog::ShowDirsOnly
-                                                 | QFileDialog::DontResolveSymlinks).toStdString();
+                                               | QFileDialog::DontResolveSymlinks).toStdString();
     path += ("/"+participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
     QString q = QString::fromStdString(path);
     q.replace("/", "\\");
@@ -241,8 +220,8 @@ void MainWindow::saveEDF()
         edf_set_digital_maximum(flag, i, 32767);
         edf_set_digital_minimum(flag, i, -32768);
         //设置信号最大与最小物理值(即信号在物理度量上的最大、最小值)
-        edf_set_physical_maximum(flag, i, MAX_VOLTAGE);
-        edf_set_physical_minimum(flag, i, MIN_VOLTAGE);
+        edf_set_physical_maximum(flag, i, maxVoltage);
+        edf_set_physical_minimum(flag, i, -maxVoltage);
         //设置各通道数据的单位
         edf_set_physical_dimension(flag, i, "uV");
         //设置各通道名称
@@ -577,7 +556,6 @@ void MainWindow::createMark(const std::string event)
     QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(charts[0]);
     pItem->setText(QString::fromStdString(event) + "\n" + QDateTime::currentDateTime().toString("hh:mm:ss"));
     marks[line] = std::make_pair(QDateTime::currentDateTime().toMSecsSinceEpoch(), pItem);
-    //marks[line] = std::make_pair(threshold - 1, pItem);
     /*将marker写入文件*/
     if(isRec)
     {
@@ -700,89 +678,19 @@ void MainWindow::getImpedanceFromBoard()
 }
 
 /*数据获取，暂用随机数方式代替实际方法*/
-void MainWindow::getDataFromBoard()
+void MainWindow::receiveData(std::vector<double> vec)
 {
     for(int i = 0; i < channel_num; i++)
-    {
-    #ifdef NO_BOARD
-        originalData[i] = 45 * sin(msecCnt * (2 * 3.1415926535 / 10)) + (rand() % 10 - 5);
-    #endif
-        if(isFilt)
-        {
-            Filter f;
-            /*原始数据进入带通滤波缓冲区*/
-            if(bandPassBuffer[i].size() < FILTER_ORDER + 1)
-            {
-                bandPassBuffer[i].enqueue(originalData[i]);
-            }
-            /*带通滤波*/
-            else
-            {
-                /*计算带通滤波器冲激响应*/
-                double y_n;
-                double *cur_bp_h = new double[FILTER_ORDER + 1];
-                f.countBandPassCoef(FILTER_ORDER, SAMPLE_RATE, cur_bp_h, lowCut, highCut);
-                bandPassCoff[i] = cur_bp_h;
-                /*计算滤波后的值*/
-                y_n = conv(BandPass, i);
-                /*队列左移一位*/
-                bandPassBuffer[i].dequeue();
-                /*滤波后的值入队*/
-                bandPassBuffer[i].enqueue(y_n);
-                if(notchBuffer[i].size() < FILTER_ORDER + 1)
-                    notchBuffer[i].enqueue(y_n);
-                else
-                {   /*陷波*/
-                    double *cur_n_h = new double[FILTER_ORDER + 1];
-                    f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
-                    notchCoff[i] = cur_n_h;
-                    y_n = conv(Notch, i);
-                    notchBuffer[i].dequeue();
-                    notchBuffer[i].enqueue(y_n);
-                }
-                filtData[i] = y_n;
-            }
-        }
-        if(isRec)
-        {
-            /*写入缓存txt文件*/
-            if(i < channel_num - 1)
-                samplesWrite << originalData[i] << " ";
-            else
-                samplesWrite << originalData[i] << std::endl;
-            if(i == 0) curLine++;
-        }
-    }
-    msecCnt++;
-}
-
-/*时域序列卷积*/
-double MainWindow::conv(filt type, int index)
-{
-    double y_n = 0.0;
-    if(type == BandPass)
-    {
-        for(int k = 0; k <= FILTER_ORDER; k++)
-        {
-            y_n += bandPassCoff[index][k] * bandPassBuffer[index][FILTER_ORDER - k];
-        }
-    }
-    else
-    {
-        for(int k = 0; k <= FILTER_ORDER; k++)
-        {
-            y_n += notchCoff[index][k] * notchBuffer[index][FILTER_ORDER - k];
-        }
-    }
-    return y_n;
+        graphData[i] = vec[i];
+    if(isRec) curLine++;
 }
 
 /*图像刷新*/
 void MainWindow::graphFresh()
 {
     /*波形刷新*/
-    isFilt ? updateWave(filtData) : updateWave(originalData);
-    /*在图形上绘制红色铅直线标记marker*/
+    updateWave(graphData);
+    /*绘制marker*/
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
     for(iter = marks.begin(); iter != marks.end(); iter++)
     {
@@ -826,9 +734,8 @@ void MainWindow::graphFresh()
 /*停止写入数据并保存缓存txt文件*/
 void MainWindow::stopRec()
 {
-  isRec = false;
+  emit doneRec();
   //关闭txt文件输入流
-  samplesWrite.close();
   eventsWrite.close();
 }
 
@@ -980,6 +887,6 @@ void MainWindow::on_filter_clicked()
             return;
         }
         /*滤波*/
-        isFilt = true;
+        emit doFilt(lowCut, highCut, notchCut);
     }
 }

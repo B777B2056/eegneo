@@ -12,9 +12,10 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include "filter.h"
+//#include "filter.h"
 #include "setchannelname.h"
 #include "p300.h"
+#include <workthread.h>
 
 extern "C"
 {
@@ -28,26 +29,15 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 #define NO_BOARD  // 没板子宏
-
-#define SAMPLE_RATE 50  // 采样率
-#define MAX_VOLTAGE 50.0  // EDF文件各通道最大电压值
-#define MIN_VOLTAGE -10.0  // EDF文件各通道最小电压值
 #define TIME_INTERVAL 5  // 波形显示的时间间隔，单位为s
 #define GRAPH_FRESH 30  // 触发波形显示定时器的时间，单位为ms
 #define DATA_FRESH 20 // 触发数据更新定时器的时间，单位为ms
 #define IMPEDANCE_FRESH 2000  // 2s刷新一次阻抗
 #define MANUAL_MAKER 8 // 手动Mark数量
-#define FILTER_ORDER 31 // 滤波器阶数(只能为奇数)
 
 /*颜色枚举*/
 enum background
 {Green, Yellow, Red};
-
-/*滤波器枚举*/
-enum filt
-{BandPass, Notch};
-
-void globalInit(int cn);
 
 class MainWindow : public QMainWindow
 {
@@ -59,6 +49,11 @@ protected:
 public:
     MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent = nullptr);
     ~MainWindow();
+
+signals:
+    void doRec(std::string);  // 开始记录
+    void doneRec();  // 停止记录
+    void doFilt(int, int, int);  // 开始滤波
 
 public slots:
     void createMark(const std::string event);  // 创建Marker
@@ -102,6 +97,8 @@ private slots:
 
     void on_comboBox_3_currentIndexChanged(int index);
 
+    void receiveData(std::vector<double>);
+
     void setVoltage50();  // 设置各电导电压范围(-50~50uV)
 
     void setVoltage100();  // 设置各电导电压范围(-100~100uV)
@@ -113,8 +110,6 @@ private slots:
     void graphFresh();  // 触发图像更新
 
 #ifdef NO_BOARD
-    void getDataFromBoard();  // 获取实时更新的EEG数据
-
     void getImpedanceFromBoard();  // 获取各导阻抗，截断原始的double类型数据(没有板子之前用槽函数产生随机数代替)
 #endif
 
@@ -129,12 +124,9 @@ private slots:
     void p300Oddball();  // oddball范式p300实验
 
 private:
-#ifdef NO_BOARD
-    /*正弦波测试*/
-    int msecCnt = 0;
-    /*测试数据更新定时器*/
-    QTimer *dataTimer;
-#endif
+    /*数据获取、存储与滤波子线程*/
+    DataThread *dataThread;
+
     /*电导数量选择相关*/
     int channel_num = 16;
     QChartView *montages[16];
@@ -146,16 +138,14 @@ private:
     /*与阻抗测量相关的私有成员*/
     std::vector<int> impedance;
     QTimer *impTimer;
+#ifndef NO_BOARD
+    void getImpedanceFromBoard();  // 获取各导阻抗，截断原始的double类型数据(有板子以后在这声明)
+#endif
 
     /*与滤波相关的私有成员*/
-    bool isFilt;  // 是否进行滤波
     double lowCut, highCut, notchCut;  // 被选好的高通、低通滤波、凹陷滤波频率
     double highPassFres[7] = {0.1, 0.3, 3.5, 8.0, 12.5, 16.5, 20.5};  // 高通滤波频率选择
     double lowPassFres[7] = {8.0, 12.5, 16.5, 20.5, 28.0, 45.0, 50.0};  // 低通滤波频率选择
-    std::vector<QQueue<double>> bandPassBuffer, notchBuffer;  // 滤波时各通道数据缓存区，长度为滤波器阶数
-    std::vector<double *> bandPassCoff, notchCoff;  // FIR I型带通滤波器与陷波器冲激响应
-    std::vector<double> filtData;  // 滤波后输入图像的数据
-    double conv(const filt type, const int index);  // 卷积计算
 
     /*与Marker相关的私有成员*/
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>> marks;
@@ -174,11 +164,7 @@ private:
     void updateWave(const std::vector<double>& channelData);  //更新波形
 
     /*与数据获取有关的私有成员*/
-    std::vector<double> originalData;  // 通道的原始数据
-#ifndef NO_BOARD
-    void getDataFromBoard();  // 从单片机获取数据
-    void getImpedanceFromBoard();  // 获取各导阻抗，截断原始的double类型数据为int
-#endif
+    std::vector<double> graphData;  // 通道的原始数据
 
     /*与文件保存有关的私有成员*/
     int eventCount;
