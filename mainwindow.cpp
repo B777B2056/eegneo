@@ -18,8 +18,10 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     this->others = others;
     this->expName = expName;
     this->channel_num = cn;
-    ui->label_6->setText(participantNum);
+    this->setWindowTitle("EEG信号采集平台@被试编号：" + this->participantNum);
     tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
+    /*滤波信号灯初始化为红色：未滤波*/
+    ui->label_5->setStyleSheet("QLabel{background:#FF0000;}");
     /*电极数组初始化*/
     montages[0] = ui->wave;
     montages[1] = ui->wave_2;
@@ -78,9 +80,10 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     connect(ui->action100uV, SIGNAL(triggered()), this, SLOT(setVoltage100()));
     connect(ui->action200uV, SIGNAL(triggered()), this, SLOT(setVoltage200()));
     connect(dataThread, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
+    connect(dataThread, SIGNAL(inFilt()), this, SLOT(isInFilt()));
     connect(this, SIGNAL(doFilt(int, int, int)), dataThread, SLOT(startFilt(int, int, int)));
     connect(this, SIGNAL(doRec(std::string)), dataThread, SLOT(startRec(std::string)));
-    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));
+    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));    
 }
 
 MainWindow::~MainWindow()
@@ -488,7 +491,7 @@ void MainWindow::saveBehavioralP300(std::string path)
         beh_file << pre_exp << std::endl;
     }
     //正式实验
-    for(int i = 0; i < 200; i++)
+    for(int i = 0; i < p300OddballImgNum; i++)
     {
         //Subject
         beh_file << participantNum.toStdString();
@@ -747,17 +750,23 @@ void MainWindow::p300Oddball()
     reply = QMessageBox::information(this, tr("p300-oddball"),
                                     "实验名称：P300诱发电位刺激\n"
                                     "实验范式：Oddball\n"
-                                    "实验时长：7分钟左右\n"
-                                    "实验内容：数字2(20%概率出现)与数字8交替闪烁(80%概率出现)。",
+                                    "实验内容：数字2与数字8交替闪烁。",
                                     QMessageBox::Ok);
     if(reply == QMessageBox::Ok)
     {
         isSaveP300BH = true;
         //进入实验
         P300Oddball *p = new P300Oddball();
+        connect(p, SIGNAL(sendImgNum(int)), this, SLOT(getImgNum(int)));
         connect(p, SIGNAL(sendMark(const std::string)), this, SLOT(createMark(const std::string)));
         p->show();
     }
+}
+
+/*设置P300-Oddball图片总数量，保存行为学数据时需要*/
+void MainWindow::getImgNum(int n)
+{
+    p300OddballImgNum = n;
 }
 
 /*获取已输入的marker*/
@@ -789,34 +798,6 @@ void MainWindow::on_lineEdit_4_editingFinished()
         markerNames[3] = m.toStdString();
 }
 
-void MainWindow::on_lineEdit_5_editingFinished()
-{
-    QString m = ui->lineEdit_5->text();
-    if(!m.isEmpty())
-        markerNames[4] = m.toStdString();
-}
-
-void MainWindow::on_lineEdit_6_editingFinished()
-{
-    QString m = ui->lineEdit_6->text();
-    if(!m.isEmpty())
-        markerNames[5] = m.toStdString();
-}
-
-void MainWindow::on_lineEdit_7_editingFinished()
-{
-    QString m = ui->lineEdit_7->text();
-    if(!m.isEmpty())
-        markerNames[6] = m.toStdString();
-}
-
-void MainWindow::on_lineEdit_8_editingFinished()
-{
-    QString m = ui->lineEdit_8->text();
-    if(!m.isEmpty())
-        markerNames[7] = m.toStdString();
-}
-
 void MainWindow::on_pushButton_2_clicked()
 {
     createMark(markerNames[0]);
@@ -835,26 +816,6 @@ void MainWindow::on_pushButton_4_clicked()
 void MainWindow::on_pushButton_5_clicked()
 {
     createMark(markerNames[3]);
-}
-
-void MainWindow::on_pushButton_6_clicked()
-{
-    createMark(markerNames[4]);
-}
-
-void MainWindow::on_pushButton_7_clicked()
-{
-    createMark(markerNames[5]);
-}
-
-void MainWindow::on_pushButton_8_clicked()
-{
-    createMark(markerNames[6]);
-}
-
-void MainWindow::on_pushButton_9_clicked()
-{
-    createMark(markerNames[7]);
 }
 
 /*选择带通滤波、凹陷滤波频率*/
@@ -889,4 +850,9 @@ void MainWindow::on_filter_clicked()
         /*滤波*/
         emit doFilt(lowCut, highCut, notchCut);
     }
+}
+
+void MainWindow::isInFilt()
+{
+    ui->label_5->setStyleSheet("QLabel{background:#00FF00;}");
 }

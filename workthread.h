@@ -30,7 +30,6 @@ protected:
 private:
     int msecCnt = 0;
     int channels_num;
-    int lowCut, highCut, notchCut;
     bool isFilt, isRec;
     std::ofstream samplesWrite;
     QTimer *dataTimer;
@@ -45,6 +44,7 @@ private:
 
 signals:
     void sendData(std::vector<double>);  // 发送数据至主线程
+    void inFilt();  // 滤波数据已产生的信号
 
 #ifdef NO_BOARD
 private slots:

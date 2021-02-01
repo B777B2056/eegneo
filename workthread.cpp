@@ -59,29 +59,27 @@ void DataThread::generateData()
             /*带通滤波*/
             else
             {
-                /*计算带通滤波器冲激响应*/
-                double y_n;
-                double *cur_bp_h = new double[FILTER_ORDER + 1];
-                f.countBandPassCoef(FILTER_ORDER, SAMPLE_RATE, cur_bp_h, lowCut, highCut);
-                bandPassCoff[i] = cur_bp_h;
+                double bp_y_n;
                 /*计算滤波后的值*/
-                y_n = conv(BandPass, i);
+                bp_y_n = conv(BandPass, i);
                 /*队列左移一位*/
                 bandPassBuffer[i].dequeue();
-                /*滤波后的值入队*/
-                bandPassBuffer[i].enqueue(y_n);
+                /*原始值入队*/
+                bandPassBuffer[i].enqueue(data[i]);
+                /*带通滤波后的值入队*/
                 if(notchBuffer[i].size() < FILTER_ORDER + 1)
-                    notchBuffer[i].enqueue(y_n);
-                else
-                {   /*陷波*/
-                    double *cur_n_h = new double[FILTER_ORDER + 1];
-                    f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
-                    notchCoff[i] = cur_n_h;
-                    y_n = conv(Notch, i);
-                    notchBuffer[i].dequeue();
-                    notchBuffer[i].enqueue(y_n);
+                {
+                    notchBuffer[i].enqueue(bp_y_n);
+                    data[i] = bp_y_n;
                 }
-                data[i] = y_n;
+                else
+                {
+                    double y_n = conv(Notch, i);
+                    notchBuffer[i].dequeue();
+                    notchBuffer[i].enqueue(bp_y_n);
+                    data[i] = y_n;
+                }
+                emit inFilt();
             }
         }
     }
@@ -113,9 +111,18 @@ void DataThread::stopRec()
 void DataThread::startFilt(int lowCut, int highCut, int notchCut)
 {
     this->isFilt = true;
-    this->lowCut = lowCut;
-    this->highCut = highCut;
-    this->notchCut = notchCut;
+    Filter f;
+    for(std::size_t i = 0; i < data.size(); i++)
+    {
+        /*计算带通滤波器冲激响应*/
+        double *cur_bp_h = new double[FILTER_ORDER + 1];
+        f.countBandPassCoef(FILTER_ORDER, SAMPLE_RATE, cur_bp_h, lowCut, highCut);
+        bandPassCoff[i] = cur_bp_h;
+        /*计算陷波器冲激响应*/
+        double *cur_n_h = new double[FILTER_ORDER + 1];
+        f.countNotchCoef(FILTER_ORDER, SAMPLE_RATE, cur_n_h, notchCut);
+        notchCoff[i] = cur_n_h;
+    }
 }
 
 /*时域序列卷积*/

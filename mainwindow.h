@@ -12,7 +12,6 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-//#include "filter.h"
 #include "setchannelname.h"
 #include "p300.h"
 #include <workthread.h>
@@ -67,14 +66,6 @@ private slots:
 
     void on_lineEdit_4_editingFinished();
 
-    void on_lineEdit_5_editingFinished();
-
-    void on_lineEdit_6_editingFinished();
-
-    void on_lineEdit_7_editingFinished();
-
-    void on_lineEdit_8_editingFinished();
-
     void on_pushButton_2_clicked();
 
     void on_pushButton_3_clicked();
@@ -83,21 +74,17 @@ private slots:
 
     void on_pushButton_5_clicked();
 
-    void on_pushButton_6_clicked();
-
-    void on_pushButton_7_clicked();
-
-    void on_pushButton_8_clicked();
-
-    void on_pushButton_9_clicked();
-
     void on_comboBox_currentIndexChanged(int index);
 
     void on_comboBox_2_currentIndexChanged(int index);
 
     void on_comboBox_3_currentIndexChanged(int index);
 
-    void receiveData(std::vector<double>);
+    void getImgNum(int);  // 接收P300-Oddball实验图片总数量
+
+    void receiveData(std::vector<double>);  // 从子线程接收数据
+
+    void isInFilt();  // 进入滤波，置信号灯为绿色
 
     void setVoltage50();  // 设置各电导电压范围(-50~50uV)
 
@@ -179,6 +166,9 @@ private:
     std::string tempFiles;
     std::vector<std::string> channelNames;  // 通道名称
     void setFilePath(int s, std::string& path);  // 设置文件保存的路径
+
+    /*与刺激实验有关的成员*/
+    int p300OddballImgNum;
     void saveBehavioralP300(const std::string path);  // 保存行为学数据
 
     /*UI*/

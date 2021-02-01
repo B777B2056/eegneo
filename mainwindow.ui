@@ -6,509 +6,18 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1113</width>
-    <height>725</height>
+    <width>924</width>
+    <height>739</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>EEG信号采集平台</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="layoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>890</x>
-      <y>60</y>
-      <width>212</width>
-      <height>305</height>
-     </rect>
-    </property>
-    <layout class="QVBoxLayout" name="verticalLayout_3">
-     <item>
-      <widget class="QLabel" name="label">
-       <property name="maximumSize">
-        <size>
-         <width>220</width>
-         <height>30</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>手动标记</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_12">
-       <item>
-        <widget class="QLineEdit" name="lineEdit">
-         <property name="minimumSize">
-          <size>
-           <width>55</width>
-           <height>21</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_2">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M1</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_2">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_3">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M2</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_13">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_3">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_4">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M3</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_14">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_4">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_5">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M4</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_15">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_5">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_6">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M5</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_16">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_6">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_7">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M6</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_17">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_7">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_8">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M7</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_18">
-       <item>
-        <widget class="QLineEdit" name="lineEdit_8">
-         <property name="maximumSize">
-          <size>
-           <width>180</width>
-           <height>21</height>
-          </size>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_9">
-         <property name="maximumSize">
-          <size>
-           <width>31</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>M8</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-    </layout>
-   </widget>
-   <widget class="QWidget" name="layoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>627</width>
-      <height>55</height>
-     </rect>
-    </property>
-    <layout class="QVBoxLayout" name="verticalLayout_6">
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
-       <item>
-        <widget class="QLabel" name="label_22">
-         <property name="maximumSize">
-          <size>
-           <width>70</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>被试编号：</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_6">
-         <property name="maximumSize">
-          <size>
-           <width>700</width>
-           <height>15</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>0</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <item>
-        <widget class="QLabel" name="label_2">
-         <property name="maximumSize">
-          <size>
-           <width>90</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>起始频率(Hz)</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="comboBox">
-         <property name="minimumSize">
-          <size>
-           <width>80</width>
-           <height>21</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>100</width>
-           <height>21</height>
-          </size>
-         </property>
-         <item>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>0.1</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>0.3</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>3.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>8</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>12.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>16.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>20.5</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_3">
-         <property name="maximumSize">
-          <size>
-           <width>90</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>截止频率(Hz)</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="comboBox_2">
-         <property name="minimumSize">
-          <size>
-           <width>80</width>
-           <height>21</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>100</width>
-           <height>21</height>
-          </size>
-         </property>
-         <item>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>8</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>12.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>16.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>20.5</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>28</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>45</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>50</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_4">
-         <property name="maximumSize">
-          <size>
-           <width>60</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>陷波(Hz)</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="comboBox_3">
-         <property name="minimumSize">
-          <size>
-           <width>80</width>
-           <height>21</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>100</width>
-           <height>21</height>
-          </size>
-         </property>
-         <item>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>50</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>60</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="filter">
-         <property name="maximumSize">
-          <size>
-           <width>93</width>
-           <height>28</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>滤波</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-    </layout>
-   </widget>
    <widget class="QChartView" name="wave" native="true">
     <property name="geometry">
      <rect>
-      <x>1080</x>
+      <x>910</x>
       <y>10</y>
       <width>761</width>
       <height>75</height>
@@ -857,15 +366,382 @@
      </widget>
     </widget>
    </widget>
-   <widget class="QListWidget" name="listWidget">
+   <widget class="QWidget" name="">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>60</y>
-      <width>871</width>
-      <height>615</height>
+      <x>3</x>
+      <y>3</y>
+      <width>913</width>
+      <height>689</height>
      </rect>
     </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_5">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3"/>
+       </item>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="maximumSize">
+          <size>
+           <width>220</width>
+           <height>30</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>手动标记</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <item>
+          <widget class="QLineEdit" name="lineEdit">
+           <property name="minimumSize">
+            <size>
+             <width>55</width>
+             <height>21</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>180</width>
+             <height>21</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_2">
+           <property name="maximumSize">
+            <size>
+             <width>31</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>M1</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QLineEdit" name="lineEdit_2">
+           <property name="maximumSize">
+            <size>
+             <width>180</width>
+             <height>21</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_3">
+           <property name="maximumSize">
+            <size>
+             <width>31</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>M2</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_13">
+         <item>
+          <widget class="QLineEdit" name="lineEdit_3">
+           <property name="maximumSize">
+            <size>
+             <width>180</width>
+             <height>21</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_4">
+           <property name="maximumSize">
+            <size>
+             <width>31</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>M3</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_14">
+         <item>
+          <widget class="QLineEdit" name="lineEdit_4">
+           <property name="maximumSize">
+            <size>
+             <width>180</width>
+             <height>21</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_5">
+           <property name="maximumSize">
+            <size>
+             <width>31</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>M4</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QLabel" name="label_2">
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>28</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>起始频率(Hz)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="comboBox">
+         <property name="minimumSize">
+          <size>
+           <width>80</width>
+           <height>21</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>100</width>
+           <height>21</height>
+          </size>
+         </property>
+         <item>
+          <property name="text">
+           <string>-</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>0.3</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>3.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>8</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>12.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>16.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>20.5</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_3">
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>28</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>截止频率(Hz)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="comboBox_2">
+         <property name="minimumSize">
+          <size>
+           <width>80</width>
+           <height>21</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>100</width>
+           <height>21</height>
+          </size>
+         </property>
+         <item>
+          <property name="text">
+           <string>-</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>8</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>12.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>16.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>20.5</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>28</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>45</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>50</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_4">
+         <property name="maximumSize">
+          <size>
+           <width>60</width>
+           <height>28</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>陷波(Hz)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="comboBox_3">
+         <property name="minimumSize">
+          <size>
+           <width>80</width>
+           <height>21</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>100</width>
+           <height>21</height>
+          </size>
+         </property>
+         <item>
+          <property name="text">
+           <string>-</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>50</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>60</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="filter">
+         <property name="maximumSize">
+          <size>
+           <width>93</width>
+           <height>28</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>滤波</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_5">
+         <property name="minimumSize">
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QListWidget" name="listWidget">
+       <property name="minimumSize">
+        <size>
+         <width>911</width>
+         <height>621</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -873,7 +749,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1113</width>
+     <width>924</width>
      <height>25</height>
     </rect>
    </property>

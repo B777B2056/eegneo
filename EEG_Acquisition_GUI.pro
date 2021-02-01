@@ -26,6 +26,7 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     p300.cpp \
+    p300oddballsetting.cpp \
     setchannelname.cpp \
     setinfo.cpp \
     workthread.cpp
@@ -35,6 +36,7 @@ HEADERS += \
     filter.h \
     mainwindow.h \
     p300.h \
+    p300oddballsetting.h \
     setchannelname.h \
     setinfo.h \
     workthread.h
@@ -42,6 +44,7 @@ HEADERS += \
 FORMS += \
     mainwindow.ui \
     p300.ui \
+    p300oddballsetting.ui \
     setchannelname.ui \
     setinfo.ui
 
