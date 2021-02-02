@@ -31,8 +31,8 @@ Retry:
         siw->close();
     }
     delete siw;
-    MainWindow w(participantNum, date, others, expName, channel_num);
-    w.show();
+    MainWindow m(participantNum, date, others, expName, channel_num);
+    m.show();
 
     return a.exec();
 }

@@ -28,7 +28,7 @@ DataThread::~DataThread()
 void DataThread::run()
 {
     dataTimer = new QTimer();
-    dataTimer->setInterval(20);
+    dataTimer->setInterval(1000 / SAMPLE_RATE);
     dataTimer->start();
     connect(dataTimer, SIGNAL(timeout()), this, SLOT(generateData()));
     //启动子线程消息循环

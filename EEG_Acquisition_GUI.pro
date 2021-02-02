@@ -21,30 +21,42 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #LIBS += -llibmat -LE:\MATLAB\extern\lib\win64\microsoft
 
 SOURCES += \
+    acquisitionwindow.cpp \
+    charthelp.cpp \
     edflib.c \
     filter.cpp \
     main.cpp \
+    mainbackground.cpp \
     mainwindow.cpp \
     p300.cpp \
     p300oddballsetting.cpp \
+    preprocesswindow.cpp \
     setchannelname.cpp \
     setinfo.cpp \
     workthread.cpp
 
 HEADERS += \
+    acquisitionwindow.h \
+    charthelp.h \
     edflib.h \
     filter.h \
+    mainbackground.h \
     mainwindow.h \
     p300.h \
     p300oddballsetting.h \
+    preprocesswindow.h \
     setchannelname.h \
     setinfo.h \
     workthread.h
 
 FORMS += \
+    acquisitionwindow.ui \
+    charthelp.ui \
+    mainbackground.ui \
     mainwindow.ui \
     p300.ui \
     p300oddballsetting.ui \
+    preprocesswindow.ui \
     setchannelname.ui \
     setinfo.ui
 

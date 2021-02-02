@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PreprocessWindow</class>
+ <widget class="QMainWindow" name="PreprocessWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QPushButton" name="pushButton">
+    <property name="geometry">
+     <rect>
+      <x>700</x>
+      <y>20</y>
+      <width>84</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>返回</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>25</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>加载数据</string>
+    </property>
+    <widget class="QMenu" name="menu_2">
+     <property name="title">
+      <string>从外界...</string>
+     </property>
+     <addaction name="actionedf"/>
+     <addaction name="actionbdf"/>
+     <addaction name="actioneeg"/>
+     <addaction name="actioncnt"/>
+    </widget>
+    <addaction name="actionlocalFile"/>
+    <addaction name="menu_2"/>
+   </widget>
+   <widget class="QMenu" name="menu_3">
+    <property name="title">
+     <string>数据滤波</string>
+    </property>
+   </widget>
+   <addaction name="menu"/>
+   <addaction name="menu_3"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionlocalFile">
+   <property name="text">
+    <string>从本程序...</string>
+   </property>
+  </action>
+  <action name="actionedf">
+   <property name="text">
+    <string>edf+</string>
+   </property>
+  </action>
+  <action name="actionbdf">
+   <property name="text">
+    <string>bdf</string>
+   </property>
+  </action>
+  <action name="actioneeg">
+   <property name="text">
+    <string>eeg</string>
+   </property>
+  </action>
+  <action name="actioncnt">
+   <property name="text">
+    <string>cnt</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
