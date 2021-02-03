@@ -6,10 +6,11 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    tempFiles = participantNum+'_'+date+'_'+others;
     this->setWindowTitle("EEG信号采集平台@被试编号：" + participantNum);
     b = new Background(this);
     m = new AcquisitionWindow(participantNum, date, others, expName, cn, this);
-    p = new PreprocessWindow(this);
+    p = new PreprocessWindow(tempFiles, this);
     ui->stackedWidget->addWidget(b);
     ui->stackedWidget->addWidget(m);
     ui->stackedWidget->addWidget(p);
@@ -22,6 +23,9 @@ MainWindow::MainWindow(QString participantNum, QString date, QString others, QSt
 
 MainWindow::~MainWindow()
 {
+    /*删除缓存文件*/
+//    std::remove((tempFiles + "_samples.txt").toStdString().c_str());
+//    std::remove((tempFiles + "_events.txt").toStdString().c_str());
     delete ui;
 }
 

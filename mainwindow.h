@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <cstdlib>
 #include "mainbackground.h"
 #include "acquisitionwindow.h"
 #include "preprocesswindow.h"
@@ -27,6 +28,7 @@ private slots:
     void on_pushButton_2_clicked();
 
 private:
+    QString tempFiles;
     Background *b;
     AcquisitionWindow *m;
     PreprocessWindow *p;

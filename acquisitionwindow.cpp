@@ -92,9 +92,6 @@ AcquisitionWindow::AcquisitionWindow(QString participantNum, QString date, QStri
 
 AcquisitionWindow::~AcquisitionWindow()
 {
-    /*删除缓存文件*/
-    remove((tempFiles + "_samples.txt").c_str());
-    remove((tempFiles + "_events.txt").c_str());
     /*释放内存*/
     std::vector<QLineSeries *> qls;
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;

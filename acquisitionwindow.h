@@ -12,6 +12,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <string>
 #include "setchannelname.h"
 #include "p300.h"
 #include "workthread.h"
@@ -147,7 +148,7 @@ private:
     int maxVoltage;
     int timeInterval;  // 波形显示的时间间隔，单位为s
     int threshold;  // 图上最多显示多少个数据点
-    ChartHelp *help;  // 绘图帮助类，存放16个chartview
+    ChartHelp *help;  // 绘图帮助类，存放chartview
     std::vector<QQueue<QPointF>> pointQueue;
     QTimer *graphTimer; //图形渲染定时器
     std::vector<QSplineSeries *> series;

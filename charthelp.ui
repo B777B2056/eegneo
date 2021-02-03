@@ -173,6 +173,16 @@
     </rect>
    </property>
   </widget>
+  <widget class="QChartView" name="widget_pre_wave" native="true">
+   <property name="geometry">
+    <rect>
+     <x>320</x>
+     <y>230</y>
+     <width>120</width>
+     <height>80</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
  <customwidgets>
   <customwidget>
