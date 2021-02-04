@@ -17,12 +17,13 @@
 enum filter
 {BandPass, Notch};
 
-class DataThread : public QThread
+/*数据获取线程*/
+class GetDataThread : public QThread
 {
     Q_OBJECT
 public:
-    DataThread(int channels_num);
-    ~DataThread();
+    GetDataThread(int channels_num);
+    ~GetDataThread();
 
 protected:
     void run();

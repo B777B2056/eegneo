@@ -16,10 +16,11 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 public slots:
+    void getBasicInfo(QString, QString);  // 获取基本信息
     void goToMainWindow();
 
 private slots:
@@ -28,7 +29,7 @@ private slots:
     void on_pushButton_2_clicked();
 
 private:
-    QString tempFiles;
+    QString participantNum, tempFiles;
     Background *b;
     AcquisitionWindow *m;
     PreprocessWindow *p;

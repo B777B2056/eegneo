@@ -12,7 +12,7 @@ class SetChannelName : public QDialog
     Q_OBJECT
 
 public:
-    explicit SetChannelName(QWidget *parent = nullptr);
+    explicit SetChannelName(int channelNum, QWidget *parent = nullptr);
     ~SetChannelName();
 
     QString *names;
@@ -33,6 +33,22 @@ private slots:
     void on_lineEdit_7_editingFinished();
 
     void on_lineEdit_8_editingFinished();
+
+    void on_lineEdit_11_editingFinished();
+
+    void on_lineEdit_15_editingFinished();
+
+    void on_lineEdit_9_editingFinished();
+
+    void on_lineEdit_13_editingFinished();
+
+    void on_lineEdit_16_editingFinished();
+
+    void on_lineEdit_14_editingFinished();
+
+    void on_lineEdit_10_editingFinished();
+
+    void on_lineEdit_12_editingFinished();
 
 private:
     Ui::setchannelname *ui;

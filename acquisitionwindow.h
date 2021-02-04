@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <setinfo.h>
 #include "setchannelname.h"
 #include "p300.h"
 #include "workthread.h"
@@ -32,7 +33,7 @@ QT_END_NAMESPACE
 #define NO_BOARD  // 没板子宏
 #define GRAPH_FRESH 30  // 触发波形显示定时器的时间，单位为ms
 #define IMPEDANCE_FRESH 2000  // 2s刷新一次阻抗
-#define MANUAL_MAKER 8 // 手动Mark数量
+#define MANUAL_MAKER 4 // 手动Mark数量
 
 /*颜色枚举*/
 enum background
@@ -43,10 +44,13 @@ class AcquisitionWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    AcquisitionWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent = nullptr);
+    AcquisitionWindow(QWidget *parent = nullptr);
     ~AcquisitionWindow();
 
+    void init();
+
 signals:
+    void sendBasicInfo(QString, QString);  // 向主界面发送基本信息(被试编号、缓存文件地址)
     void returnMain();  // 返回主界面
     void doRec(std::string);  // 开始记录
     void doneRec();  // 停止记录
@@ -118,10 +122,10 @@ private slots:
 
 private:
     /*数据获取、存储与滤波子线程*/
-    DataThread *dataThread;
+    GetDataThread *dataThread;
 
     /*电导数量选择相关*/
-    int channel_num = 16;
+    int channel_num;
     QChartView *montages[16];
     std::vector<QLabel *> impDisplay;  // 阻抗数量
 

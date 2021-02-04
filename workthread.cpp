@@ -1,7 +1,7 @@
 #include "workthread.h"
 #include <iostream>
 
-DataThread::DataThread(int channels_num) : isFilt(false), isRec(false)
+GetDataThread::GetDataThread(int channels_num) : isFilt(false), isRec(false)
 {
     this->channels_num = channels_num;
     for(int i = 0; i < this->channels_num; i++)
@@ -15,7 +15,7 @@ DataThread::DataThread(int channels_num) : isFilt(false), isRec(false)
     }
 }
 
-DataThread::~DataThread()
+GetDataThread::~GetDataThread()
 {
     delete dataTimer;
     for(std::size_t i = 0; i < bandPassCoff.size(); i++)
@@ -25,7 +25,7 @@ DataThread::~DataThread()
     }
 }
 
-void DataThread::run()
+void GetDataThread::run()
 {
     dataTimer = new QTimer();
     dataTimer->setInterval(1000 / SAMPLE_RATE);
@@ -35,7 +35,7 @@ void DataThread::run()
     this->exec();
 }
 
-void DataThread::generateData()
+void GetDataThread::generateData()
 {
     for(std::size_t i = 0; i < data.size(); i++)
     {
@@ -87,7 +87,7 @@ void DataThread::generateData()
     emit sendData(data);
 }
 
-void DataThread::startRec(std::string tempFile)
+void GetDataThread::startRec(std::string tempFile)
 {
     samplesWrite.open(tempFile);
     samplesWrite.close();
@@ -102,13 +102,13 @@ void DataThread::startRec(std::string tempFile)
     isRec = true;
 }
 
-void DataThread::stopRec()
+void GetDataThread::stopRec()
 {
     isRec = false;
     samplesWrite.close();
 }
 
-void DataThread::startFilt(int lowCut, int highCut, int notchCut)
+void GetDataThread::startFilt(int lowCut, int highCut, int notchCut)
 {
     this->isFilt = true;
     Filter f;
@@ -126,7 +126,7 @@ void DataThread::startFilt(int lowCut, int highCut, int notchCut)
 }
 
 /*时域序列卷积*/
-double DataThread::conv(filter type, int index)
+double GetDataThread::conv(filter type, int index)
 {
     double y_n = 0.0;
     if(type == BandPass)

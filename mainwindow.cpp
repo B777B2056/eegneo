@@ -1,16 +1,15 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-MainWindow::MainWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent) :
+MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
+    tempFiles(""),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    tempFiles = participantNum+'_'+date+'_'+others;
-    this->setWindowTitle("EEG信号采集平台@被试编号：" + participantNum);
     b = new Background(this);
-    m = new AcquisitionWindow(participantNum, date, others, expName, cn, this);
-    p = new PreprocessWindow(tempFiles, this);
+    m = new AcquisitionWindow(this);
+    p = new PreprocessWindow(this);
     ui->stackedWidget->addWidget(b);
     ui->stackedWidget->addWidget(m);
     ui->stackedWidget->addWidget(p);
@@ -29,6 +28,13 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::getBasicInfo(QString a, QString b)
+{
+    this->participantNum = a;
+    this->tempFiles = b;
+    this->setWindowTitle("EEG信号采集平台@被试编号：" + participantNum);
+}
+
 void MainWindow::goToMainWindow()
 {
     ui->pushButton->setVisible(true);
@@ -40,6 +46,7 @@ void MainWindow::goToMainWindow()
 
 void MainWindow::on_pushButton_clicked()
 {
+    m->init();
     ui->stackedWidget->setCurrentWidget(m);
     ui->pushButton->setVisible(false);
     ui->pushButton->setEnabled(false);
@@ -49,6 +56,7 @@ void MainWindow::on_pushButton_clicked()
 
 void MainWindow::on_pushButton_2_clicked()
 {
+    p->tempFile = tempFiles;
     ui->stackedWidget->setCurrentWidget(p);
     ui->pushButton->setVisible(false);
     ui->pushButton->setEnabled(false);

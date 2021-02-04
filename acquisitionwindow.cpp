@@ -2,7 +2,7 @@
 #include "ui_acquisitionwindow.h"
 #include "ui_charthelp.h"
 
-AcquisitionWindow::AcquisitionWindow(QString participantNum, QString date, QString others, QString expName, int cn, QWidget *parent)
+AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
     , maxVoltage(50), timeInterval(5), threshold(200)
@@ -10,40 +10,15 @@ AcquisitionWindow::AcquisitionWindow(QString participantNum, QString date, QStri
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
-    /*子线程初始化并开始*/
-    dataThread = new DataThread(cn);
-    dataThread->start();
-    /*被试信息初始化*/
-    this->participantNum = participantNum;
-    this->date = date;
-    this->others = others;
-    this->expName = expName;
-    this->channel_num = cn;
-    tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString());
     /*滤波指示信号初始化：未滤波*/
     ui->label_5->setText("Off");
     /*动态分配内存*/
     markerNames = new std::string[MANUAL_MAKER];
-    /*初始化vector*/
-    for(int i = 0; i < channel_num; i++)
-    {
-        impedance.push_back(0);
-        graphData.push_back(0.0);
-        channelNames.push_back("");
-        pointQueue.push_back(QQueue<QPointF>());
-        impDisplay.push_back(new QLabel(this));
-        series.push_back(new QSplineSeries);
-        axisX.push_back(new QDateTimeAxis);
-        axisY.push_back(new QValueAxis);
-        charts.push_back(new QChart);
-    }
     /*定时器初始化*/
     graphTimer = new QTimer(this);
     graphTimer->setInterval(GRAPH_FRESH);//设置定时周期，单位：毫秒
-    graphTimer->start();
     impTimer = new QTimer(this);
     impTimer->setInterval(IMPEDANCE_FRESH);
-    impTimer->start();
     /*绘图板初始化*/
     help = new ChartHelp();
     montages[0] = help->ui->widget;
@@ -62,14 +37,9 @@ AcquisitionWindow::AcquisitionWindow(QString participantNum, QString date, QStri
     montages[13] = help->ui->widget_14;
     montages[14] = help->ui->widget_15;
     montages[15] = help->ui->widget_16;
-    if(channel_num == 8)
-    {
-        for(int i = 8; i < 16; i++)
-            montages[i]->hide();
-    }
-    initChart();
     /*信号与槽的链接*/
     connect(this, SIGNAL(returnMain()), parent, SLOT(goToMainWindow()));
+    connect(this, SIGNAL(sendBasicInfo(QString, QString)), parent, SLOT(getBasicInfo(QString, QString)));
     connect(graphTimer, SIGNAL(timeout()), this, SLOT(graphFresh()));
     connect(impTimer, SIGNAL(timeout()), this, SLOT(getImpedanceFromBoard()));
     connect(ui->actionStart_Recording, SIGNAL(triggered()), this, SLOT(createTempTXT()));
@@ -83,15 +53,13 @@ AcquisitionWindow::AcquisitionWindow(QString participantNum, QString date, QStri
     connect(ui->action0_1s, SIGNAL(triggered()), this, SLOT(setTime1()));
     connect(ui->action0_5s, SIGNAL(triggered()), this, SLOT(setTime5()));
     connect(ui->action0_10s, SIGNAL(triggered()), this, SLOT(setTime10()));
-    connect(dataThread, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
-    connect(dataThread, SIGNAL(inFilt()), this, SLOT(isInFilt()));
-    connect(this, SIGNAL(doFilt(int, int, int)), dataThread, SLOT(startFilt(int, int, int)));
-    connect(this, SIGNAL(doRec(std::string)), dataThread, SLOT(startRec(std::string)));
-    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));    
 }
 
 AcquisitionWindow::~AcquisitionWindow()
 {
+    /*停止数据获取子线程*/
+    dataThread->quit();
+    dataThread->wait();
     /*释放内存*/
     std::vector<QLineSeries *> qls;
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
@@ -118,9 +86,79 @@ AcquisitionWindow::~AcquisitionWindow()
     delete impTimer;
     delete ui;
 }
+
+/*初始化*/
+void AcquisitionWindow::init()
+{
+    /*待用户输入基本信息*/
+    SetInfo *siw = new SetInfo;
+Retry:
+    int rec = siw->exec();
+    siw->getInfo(participantNum, date, others, expName, channel_num);
+    if(rec == QDialog::Accepted){
+        if(participantNum.isEmpty() || date.isEmpty() || expName.isEmpty() || !channel_num){
+            /*被试信息必须项缺失，弹出错误信息后返回*/
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::critical(siw, siw->tr("错误"),
+                                            "被试信息缺失！\n请检查被试编号、日期与实验名称。",
+                                            QMessageBox::Retry | QMessageBox::Abort);
+            if (reply == QMessageBox::Abort)
+            {
+                siw->close();
+            }
+            else
+            {
+                goto Retry;
+            }
+        }
+    }else{
+        siw->close();
+    }
+    delete siw;
+    /*被试信息初始化*/
+    tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+expName.toStdString()+'_'+others.toStdString());
+    emit sendBasicInfo(participantNum, "temp files//" +participantNum+'_'+date+'_'+expName+'_'+others);
+    /*子线程初始化并开始*/
+    dataThread = new GetDataThread(channel_num);
+    connect(dataThread, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
+    connect(dataThread, SIGNAL(inFilt()), this, SLOT(isInFilt()));
+    connect(this, SIGNAL(doFilt(int, int, int)), dataThread, SLOT(startFilt(int, int, int)));
+    connect(this, SIGNAL(doRec(std::string)), dataThread, SLOT(startRec(std::string)));
+    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));
+    dataThread->start();
+    /*初始化vector*/
+    for(int i = 0; i < channel_num; i++)
+    {
+        impedance.push_back(0);
+        graphData.push_back(0.0);
+        channelNames.push_back("");
+        pointQueue.push_back(QQueue<QPointF>());
+        impDisplay.push_back(new QLabel(this));
+        series.push_back(new QSplineSeries);
+        axisX.push_back(new QDateTimeAxis);
+        axisY.push_back(new QValueAxis);
+        charts.push_back(new QChart);
+    }
+    if(channel_num == 8)
+    {
+        for(int i = 8; i < 16; i++)
+            montages[i]->hide();
+    }
+    /*绘图初始化*/
+    initChart();
+    /*启动定时器*/
+    graphTimer->start();
+    impTimer->start();
+}
+
 /*创建缓存TXT文件*/
 void AcquisitionWindow::createTempTXT()
 {
+    /*缓存文件放入一个文件夹*/
+    QDir dir;
+    if (!dir.exists(QString::fromStdString("temp files")))
+        dir.mkpath("temp files");
+    tempFiles = "temp files//" + tempFiles;
     eventsWrite.open(tempFiles + "_events.txt");
     eventsWrite.close();
     eventsWrite.open(tempFiles + "_events.txt", std::ios::app);
@@ -150,7 +188,7 @@ void AcquisitionWindow::setFilePath(int s, std::string& path)
                                         QMessageBox::Ok | QMessageBox::No);
         if (reply == QMessageBox::Ok){
             /*弹窗口让用户输入各通道名称*/
-            SetChannelName scl;
+            SetChannelName scl(channel_num);
       Again:
             int rec = scl.exec();
             if(rec == QDialog::Accepted)
@@ -175,6 +213,7 @@ void AcquisitionWindow::setFilePath(int s, std::string& path)
         for(int i = 0; i < channel_num; i++)
             channelNames[i] = std::to_string(i + 1);
     }
+    emit sendBasicInfo(participantNum, participantNum+'_'+date+'_'+expName+'_'+others);
 }
 
 /*创建EDF文件*/
@@ -258,7 +297,6 @@ void AcquisitionWindow::saveEDF()
         std::getline(events_read, str);
         std::stringstream ss(str);
         ss >> run_time >> event;
-        std::cout << "Time: " << run_time << ", Event: " << event << std::endl;
         edfwrite_annotation_utf8(flag, run_time, 10, event.c_str());
     }
     //关闭文件流
@@ -873,5 +911,8 @@ void AcquisitionWindow::on_pushButton_clicked()
         QMessageBox::critical(this, tr("错误"), "数据正在写入文件！", QMessageBox::Ok);
     }
     else
+    {
+        /*发送信号*/
         emit returnMain();
+    }
 }
