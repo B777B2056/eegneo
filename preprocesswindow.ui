@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1541</width>
-    <height>801</height>
+    <width>1618</width>
+    <height>1109</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -149,8 +149,8 @@
        <widget class="QListWidget" name="listWidget">
         <property name="minimumSize">
          <size>
-          <width>1300</width>
-          <height>700</height>
+          <width>1400</width>
+          <height>900</height>
          </size>
         </property>
        </widget>
@@ -437,7 +437,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1541</width>
+     <width>1618</width>
      <height>25</height>
     </rect>
    </property>
@@ -450,18 +450,17 @@
       <string>从外界...</string>
      </property>
      <addaction name="actionedf"/>
-     <addaction name="actioncnt"/>
+     <addaction name="actioneeg_2"/>
     </widget>
     <addaction name="actionlocalFile"/>
     <addaction name="menu_2"/>
    </widget>
    <widget class="QMenu" name="menu_3">
     <property name="title">
-     <string>数据滤波</string>
+     <string>数据处理</string>
     </property>
-    <addaction name="actionlowPass"/>
-    <addaction name="actionhighPass"/>
-    <addaction name="actionnotch"/>
+    <addaction name="actionFIR"/>
+    <addaction name="actionPSD"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
@@ -504,7 +503,7 @@
   </action>
   <action name="actionedf">
    <property name="text">
-    <string>edf/edf+/bdf</string>
+    <string>.edf/.edf+</string>
    </property>
   </action>
   <action name="actionbdf">
@@ -517,14 +516,14 @@
     <string>eeg</string>
    </property>
   </action>
-  <action name="actioncnt">
+  <action name="actioneeg_2">
    <property name="text">
-    <string>cnt</string>
+    <string>.eeg(brainvision)</string>
    </property>
   </action>
-  <action name="actionlowPass">
+  <action name="actionFIR">
    <property name="text">
-    <string>低通</string>
+    <string>FIR</string>
    </property>
   </action>
   <action name="actionhighPass">
@@ -565,6 +564,16 @@
   <action name="actionrenameMotage">
    <property name="text">
     <string>电极重命名</string>
+   </property>
+  </action>
+  <action name="actioneeg_vhdr">
+   <property name="text">
+    <string>eeg(.vhdr)</string>
+   </property>
+  </action>
+  <action name="actionPSD">
+   <property name="text">
+    <string>PSD（功率谱估计）</string>
    </property>
   </action>
  </widget>

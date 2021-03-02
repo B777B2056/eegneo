@@ -15,23 +15,28 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
-#INCLUDEPATH += E:\MATLAB\extern\include\
-#LIBS += -llibeng -LE:\MATLAB\extern\lib\win64\microsoft
-#LIBS += -llibmx -LE:\MATLAB\extern\lib\win64\microsoft
-#LIBS += -llibmat -LE:\MATLAB\extern\lib\win64\microsoft
+INCLUDEPATH +=E:\Anaconda3\include   ############# python enviroment
+LIBS += -LE:\Anaconda3\libs\
+-l_tkinter\
+-lpython3\
+-lpython37
 
 SOURCES += \
     acquisitionwindow.cpp \
     charthelp.cpp \
     edflib.c \
     filter.cpp \
+    filtersetting.cpp \
     main.cpp \
     mainbackground.cpp \
     mainwindow.cpp \
     p300.cpp \
     p300oddballsetting.cpp \
     preprocesswindow.cpp \
+    psd.cpp \
+    psdinfo.cpp \
     setchannelname.cpp \
+    seteventchannel.cpp \
     setinfo.cpp \
     workthread.cpp
 
@@ -40,25 +45,36 @@ HEADERS += \
     charthelp.h \
     edflib.h \
     filter.h \
+    filtersetting.h \
     mainbackground.h \
     mainwindow.h \
     p300.h \
     p300oddballsetting.h \
     preprocesswindow.h \
+    psd.h \
+    psdinfo.h \
     setchannelname.h \
+    seteventchannel.h \
     setinfo.h \
     workthread.h
 
 FORMS += \
     acquisitionwindow.ui \
     charthelp.ui \
+    filtersetting.ui \
     mainbackground.ui \
     mainwindow.ui \
     p300.ui \
     p300oddballsetting.ui \
     preprocesswindow.ui \
+    psd.ui \
+    psdinfo.ui \
     setchannelname.ui \
+    seteventchannel.ui \
     setinfo.ui
 
 TRANSLATIONS += \
     EEG_Acquisition_GUI_zh_CN.ts
+
+DISTFILES += \
+    dataformatload.py
