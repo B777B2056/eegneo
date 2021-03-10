@@ -4,7 +4,7 @@
 
 PreprocessWindow::PreprocessWindow(QWidget *parent) :
     QMainWindow(parent),
-    interval(1), channelNum(1), maxVotagle(50), startTime(0.0), stopTime(0.0),
+    interval(1), channelNum(1), maxVotagle(50), startTimePSD(0.0), stopTimePSD(0.0),
     start(0.0), end(5.0), jmp_start(-1.0), jmp_end(-1.0), allTime(0.0),
     hasOpen(false), isJmp(false), isOverlapping(false),
     channelsName(nullptr),
@@ -21,6 +21,7 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
     connect(ui->actionrenameMotage, SIGNAL(triggered()), this, SLOT(setChannelsName()));
     connect(ui->actionFIR, SIGNAL(triggered()), this, SLOT(filt()));
     connect(ui->actionPSD, SIGNAL(triggered()), this, SLOT(plotPSD()));
+    connect(ui->actionWigner, SIGNAL(triggered()), this, SLOT(plotWigner()));
 }
 
 PreprocessWindow::~PreprocessWindow()
@@ -810,36 +811,35 @@ void PreprocessWindow::filt()
 }
 
 /*==================================== 功率谱估计 ======================================*/
-void PreprocessWindow::getStartTime(double a)
+void PreprocessWindow::getStartTimePSD(double a)
 {
-    this->startTime = a;
+    this->startTimePSD = a;
 }
 
-void PreprocessWindow::getStopTime(double a)
+void PreprocessWindow::getStopTimePSD(double a)
 {
-    this->stopTime = a;
+    this->stopTimePSD = a;
 }
 
 void PreprocessWindow::plotPSD()
 {
     PSDInfo *psi = new PSDInfo(this);
     p = new PSD(channelNum, sampleFreq);
-    connect(psi, SIGNAL(sendStartTime(double)), this, SLOT(getStartTime(double)));
-    connect(psi, SIGNAL(sendStopTime(double)), this, SLOT(getStopTime(double)));
+    connect(psi, SIGNAL(sendStartTime(double)), this, SLOT(getStartTimePSD(double)));
+    connect(psi, SIGNAL(sendStopTime(double)), this, SLOT(getStopTimePSD(double)));
     connect(psi, SIGNAL(sendStartFreq(double)), p, SLOT(getStartFreq(double)));
     connect(psi, SIGNAL(sendStopFreq(double)), p, SLOT(getStopFreq(double)));
     connect(psi, SIGNAL(sendPSDType(PSD_Type)), p, SLOT(getPSDType(PSD_Type)));
-    int reply = psi->exec();
-    if(reply == QDialog::Accepted)
+    if(psi->exec() == QDialog::Accepted)
     {
-        if((stopTime == 0.0) || (stopTime > allTime))
-            stopTime = allTime;
-        if(startTime >= stopTime)
+        if((stopTimePSD == 0.0) || (stopTimePSD > allTime))
+            stopTimePSD = allTime;
+        if(startTimePSD >= stopTimePSD)
         {
             QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
             return;
         }
-        int k, len = (stopTime - startTime) * (int)sampleFreq;
+        int k, len = samplePoints[0].size();
         unsigned int i;
         double *points[channelNum];
         for(k = 0; k < channelNum; k++)
@@ -850,14 +850,73 @@ void PreprocessWindow::plotPSD()
             k = 0;
             for(i = 0; i < sample_iter->second.size(); i++)
             {
-                if(sample_iter->second[i].x() >= startTime)
+                if(sample_iter->second[i].x() >= startTimePSD)
                 {
-                    if(k < len)
-                        points[sample_iter->first][k++] = sample_iter->second[i].y();
+                     points[sample_iter->first][k++] = sample_iter->second[i].y();
                 }
             }
         }
         p->plot(points, len);
         p->show();
+    }
+}
+
+/*==================================== 维格纳分布 ======================================*/
+void PreprocessWindow::getBeginTime(double a)
+{
+    this->startTimeWigner = a;
+}
+
+void PreprocessWindow::getEndTime(double a)
+{
+    this->endTimeWigner = a;
+}
+
+void PreprocessWindow::getChannel(QString a)
+{
+    this->channelWigner = a;
+}
+
+void PreprocessWindow::plotWigner()
+{
+    WignerInfo *wi = new WignerInfo(this);
+    Wigner *w = new Wigner(channelNum, sampleFreq);
+    connect(wi, SIGNAL(sendBeginTime(double)), this, SLOT(getBeginTime(double)));
+    connect(wi, SIGNAL(sendEndTime(double)), this, SLOT(getEndTime(double)));
+    connect(wi, SIGNAL(sendBeginTime(double)), w, SLOT(getBeginTime(double)));
+    connect(wi, SIGNAL(sendEndTime(double)), w, SLOT(getEndTime(double)));
+    connect(wi, SIGNAL(sendChannelName(QString)), w, SLOT(getChannel(QString)));
+    connect(wi, SIGNAL(sendChannelName(QString)), this, SLOT(getChannel(QString)));
+    if(wi->exec() == QDialog::Accepted)
+    {
+        // 判断参数是否合法
+        int i;
+        bool isFind = false;
+        for(i = 0; i < channelNum; i++)
+        {
+            if(channelWigner.toStdString() == channelsName[i])
+            {
+                isFind = true;
+                break;
+            }
+        }
+        if(isFind)
+        {
+            int j, k = 0, len = samplePoints[i].size();
+            std::vector<double> points;
+            for(j = 0; j < len; j++)
+            {
+                if(((int)samplePoints[i][j].x() == k))
+                {
+                    points.push_back(samplePoints[i][j].y());
+                    ++k;
+                }
+            }
+            std::cout << points.size();
+            w->plotWigner(points);
+            w->show();
+        }
+        else
+            QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
     }
 }

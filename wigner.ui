@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>PSD</class>
- <widget class="QWidget" name="PSD">
+ <class>Wigner</class>
+ <widget class="QWidget" name="Wigner">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>575</width>
-    <height>467</height>
+    <width>707</width>
+    <height>300</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,6 +16,9 @@
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
     <widget class="QChartView" name="widget" native="true"/>
+   </item>
+   <item>
+    <widget class="QChartView" name="widget_2" native="true"/>
    </item>
   </layout>
  </widget>

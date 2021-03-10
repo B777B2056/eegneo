@@ -457,42 +457,34 @@
    </widget>
    <widget class="QMenu" name="menu_3">
     <property name="title">
-     <string>数据处理</string>
+     <string>数据分析</string>
     </property>
-    <addaction name="actionFIR"/>
     <addaction name="actionPSD"/>
+    <addaction name="actionDWT"/>
+    <addaction name="actionWigner"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
-     <string>手动剔除</string>
+     <string>预处理</string>
     </property>
-    <addaction name="actionbadChannel"/>
-    <addaction name="actionbadData"/>
-   </widget>
-   <widget class="QMenu" name="menu_5">
-    <property name="title">
-     <string>电极定位</string>
-    </property>
-   </widget>
-   <widget class="QMenu" name="menu_6">
-    <property name="title">
-     <string>电极重参考</string>
-    </property>
+    <addaction name="actionDJDW"/>
+    <addaction name="actionFIR"/>
+    <addaction name="actionspilt"/>
+    <addaction name="actionre_sampling"/>
+    <addaction name="actionbaseline"/>
    </widget>
    <widget class="QMenu" name="menu_7">
     <property name="title">
      <string>工具</string>
     </property>
     <addaction name="actionrenameMotage"/>
-    <addaction name="actionresampling"/>
-    <addaction name="actionautoRejection"/>
+    <addaction name="actionbadData"/>
+    <addaction name="actionbadChannel"/>
     <addaction name="actionICA"/>
    </widget>
    <addaction name="menu"/>
    <addaction name="menu_3"/>
    <addaction name="menu_4"/>
-   <addaction name="menu_5"/>
-   <addaction name="menu_6"/>
    <addaction name="menu_7"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -523,7 +515,7 @@
   </action>
   <action name="actionFIR">
    <property name="text">
-    <string>FIR</string>
+    <string>滤波（FIR）</string>
    </property>
   </action>
   <action name="actionhighPass">
@@ -538,12 +530,12 @@
   </action>
   <action name="actionbadChannel">
    <property name="text">
-    <string>坏导</string>
+    <string>插值坏导</string>
    </property>
   </action>
   <action name="actionbadData">
    <property name="text">
-    <string>坏段</string>
+    <string>剔除坏段</string>
    </property>
   </action>
   <action name="actionresampling">
@@ -574,6 +566,36 @@
   <action name="actionPSD">
    <property name="text">
     <string>PSD（功率谱估计）</string>
+   </property>
+  </action>
+  <action name="actionDJDW">
+   <property name="text">
+    <string>电极定位</string>
+   </property>
+  </action>
+  <action name="actionspilt">
+   <property name="text">
+    <string>数据分段</string>
+   </property>
+  </action>
+  <action name="actionre_sampling">
+   <property name="text">
+    <string>重参考</string>
+   </property>
+  </action>
+  <action name="actionbaseline">
+   <property name="text">
+    <string>基线校正</string>
+   </property>
+  </action>
+  <action name="actionDWT">
+   <property name="text">
+    <string>DWT（小波变换）</string>
+   </property>
+  </action>
+  <action name="actionWigner">
+   <property name="text">
+    <string>Wigner（维格纳分布）</string>
    </property>
   </action>
  </widget>

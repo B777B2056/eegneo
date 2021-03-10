@@ -164,7 +164,7 @@ void PSD::fft(double *x, double *y, int n, int sign)
 
 void PSD::calcPSD(double *x, int len, int index)
 {
-    int i, j, k, s, m2, nrd, kmax, nsl, nsectp, nfft21, numSections, numUsed, start = -1, end = -1, m = 64, fftLen = 128;
+    int i, j, k, s, m2, nrd, kmax, nsl, nsectp, nfft21, numSections, numUsed, start = -1, end = -1, m = 1024, fftLen = 2048;
     double u, fl, xsum, norm, twopi, rexmn, imxmn, xmean, minP, maxP, *xa, *xreal, *ximag, *window, *r, *psdFreq, *psdVal;
     xa = new double[fftLen];
     xreal = new double[fftLen];
@@ -282,7 +282,7 @@ void PSD::calcPSD(double *x, int len, int index)
         {
             if(psdVal[i] == 0.0)
                 psdVal[i] = 1.0e-15;
-            psdVal[i] = 20.0 * log10(psdVal[i]);
+            psdVal[i] = 10.0 * log10(psdVal[i]);
         }
     }
     minP = psdVal[0];

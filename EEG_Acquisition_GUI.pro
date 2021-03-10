@@ -23,6 +23,7 @@ LIBS += -LE:\Anaconda3\libs\
 
 SOURCES += \
     acquisitionwindow.cpp \
+    analysistools.cpp \
     charthelp.cpp \
     edflib.c \
     filter.cpp \
@@ -38,10 +39,13 @@ SOURCES += \
     setchannelname.cpp \
     seteventchannel.cpp \
     setinfo.cpp \
+    wigner.cpp \
+    wignerinfo.cpp \
     workthread.cpp
 
 HEADERS += \
     acquisitionwindow.h \
+    analysistools.h \
     charthelp.h \
     edflib.h \
     filter.h \
@@ -56,6 +60,8 @@ HEADERS += \
     setchannelname.h \
     seteventchannel.h \
     setinfo.h \
+    wigner.h \
+    wignerinfo.h \
     workthread.h
 
 FORMS += \
@@ -71,7 +77,9 @@ FORMS += \
     psdinfo.ui \
     setchannelname.ui \
     seteventchannel.ui \
-    setinfo.ui
+    setinfo.ui \
+    wigner.ui \
+    wignerinfo.ui
 
 TRANSLATIONS += \
     EEG_Acquisition_GUI_zh_CN.ts

@@ -12,15 +12,17 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <math.h>
-#include <Python.h>
 #include "charthelp.h"
 #include "setchannelname.h"
 #include "seteventchannel.h"
 #include "filter.h"
 #include "filtersetting.h"
 #include "psd.h"
+#include "wigner.h"
 #include "psdinfo.h"
+#include <Python.h>
+
+#include "wignerinfo.h"
 extern "C"
 {
     #include "edflib.h"
@@ -54,9 +56,13 @@ private slots:
     void readEEG();  // 读取CNT格式文件
     void setChannelsName();
     void filt();  // 滤波
-    void getStartTime(double);  // 获取功率谱起始时间
-    void getStopTime(double);  // 获取功率谱结束时间
+    void getStartTimePSD(double);  // 获取功率谱起始时间
+    void getStopTimePSD(double);  // 获取功率谱结束时间
     void plotPSD();  // 绘制功率谱估计曲线
+    void getBeginTime(double);
+    void getEndTime(double);
+    void getChannel(QString);
+    void plotWigner();  // 绘制单通道维格纳分布图
     void on_comboBox_2_currentIndexChanged(int index);
     void on_pushButton_4_clicked();
     void on_pushButton_5_clicked();
@@ -71,7 +77,8 @@ private:
     int interval;  // 波形显示的区间的最大长度（单位为秒）
     int channelNum;  // 通道数
     int maxVotagle;  // 最大电压
-    int startTime, stopTime;  // 功率谱起始、结束时间
+    int startTimePSD, stopTimePSD;  // 功率谱起始、结束时间
+    int startTimeWigner, endTimeWigner;  // Wigner起始、终止时间
     double sampleFreq;  // 采样率
     double lowPass, highPass;  // 滤波器低、高通频率
     double start, end, jmp_start, jmp_end;  // 波形显示区间
@@ -79,6 +86,7 @@ private:
     bool hasOpen;  // 是否已经展示过波形
     bool isJmp;  // 是否进行区间跳转
     bool isOverlapping;  // 波形是否已经重叠
+    QString channelWigner;  // 绘制Wigner分布的通道名称
     PSD *p;
     std::string *channelsName;
     ChartHelp *help;  // 绘图帮助类，存放chartview
