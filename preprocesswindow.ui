@@ -595,7 +595,7 @@
   </action>
   <action name="actionWigner">
    <property name="text">
-    <string>Wigner（维格纳分布）</string>
+    <string>WVD（维格纳-费力分布）</string>
    </property>
   </action>
  </widget>

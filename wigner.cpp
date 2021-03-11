@@ -9,10 +9,11 @@ Wigner::Wigner(int c, double s, QWidget *parent) :
     ui->setupUi(this);
     this->channelNum = c;
     this->sampleFreq = s;
+    this->setWindowTitle("Wigner-Ville分布");
     chart = new QChart*[2];
     axisX = new QValueAxis*[2];
     axisY = new QValueAxis*[2];
-    series = new QSplineSeries*[2];
+//    series = new QSplineSeries*[2];
 }
 
 Wigner::~Wigner()
@@ -40,8 +41,10 @@ void Wigner::plotWigner(std::vector<double>& x)
 
     if((beginTime >= 0.0) && (endTime > beginTime))
     {
+        this->m = findMin2(beginTime);
         initChart(0);
-        initChart(1);        calc(x);
+        initChart(1);
+        calc(x);
     }
     else
         QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
@@ -49,26 +52,36 @@ void Wigner::plotWigner(std::vector<double>& x)
 
 void Wigner::initChart(int index)
 {
+    int limit = (index == 0) ? this->m : (this->endTime - this->beginTime + 1);
     chart[index] = new QChart;
     axisX[index] = new QValueAxis;
     axisY[index] = new QValueAxis;
-    series[index] = new QSplineSeries;
+    series[index] = new QSplineSeries*[limit];
+    for(int i = 0; i < limit; i++)
+    {
+        series[index][i] = new QSplineSeries;
+    }
     //设置x轴
     axisX[index]->setRange(beginTime, endTime);
     axisX[index]->setTickCount(5);
+    axisX[index]->setTitleText(!index ? "频率/Hz" : "时间/s");
     chart[index]->addAxis(axisX[index], Qt::AlignBottom);
     //设置y轴
     axisY[index]->setRange(beginTime, endTime);
+    axisY[index]->setTitleText("幅值");
     chart[index]->addAxis(axisY[index], Qt::AlignLeft);
     //链接数据
-    series[index]->setUseOpenGL(true);
-    QPen splinePen;
-    splinePen.setBrush(Qt::blue);
-    splinePen.setColor(Qt::blue);
-    series[index]->setPen(splinePen);
-    chart[index]->addSeries(series[index]);
-    chart[index]->setAxisX(axisX[index], series[index]);
-    chart[index]->setAxisY(axisY[index], series[index]);
+    for(int i = 0; i < limit; i++)
+    {
+        series[index][i]->setUseOpenGL(true);
+        QPen splinePen;
+        splinePen.setBrush(Qt::blue);
+        splinePen.setColor(Qt::blue);
+        series[index][i]->setPen(splinePen);
+        chart[index]->addSeries(series[index][i]);
+        chart[index]->setAxisX(axisX[index], series[index][i]);
+        chart[index]->setAxisY(axisY[index], series[index][i]);
+    }
     //设置界面显示
     chart[index]->legend()->hide();
     chart[index]->setTheme(QChart::ChartThemeLight);
@@ -112,7 +125,7 @@ void Wigner::analytic(double *x, double *y, int len)
 /*m必须小于起始时间且必须是2的整数次幂*/
 void Wigner::calc(std::vector<double>& x)
 {
-    int i, j, len = findMin2(x.size()), m = findMin2(this->beginTime);
+    int i, j, len = findMin2(x.size());
     double am, freqy, min_freqy = 65536.0, max_freqy = 0.0, min_am = 65536.0, max_am = 0.0, *xc, *y, *sr, *si;
     sr = new double[m];
     si = new double[m];
@@ -120,7 +133,6 @@ void Wigner::calc(std::vector<double>& x)
     xc = new double[len];
     x.erase(x.begin() + len, x.end());
     std::copy(x.begin(), x.end(), xc);
-    std::cout << len;
     analytic(xc, y, len);
     for(i = (int)this->beginTime; i < (int)this->endTime; i++)
     {
@@ -148,8 +160,8 @@ void Wigner::calc(std::vector<double>& x)
                 min_am = am;
             if(am > max_am)
                 max_am = am;
-            series[0]->append(QPointF(freqy, am));
-            series[1]->append(QPointF(i, am));
+            series[0][j]->append(QPointF(freqy, am));
+            series[1][i - (int)this->beginTime]->append(QPointF(i, am));
         }
     }
     axisX[0]->setRange(min_freqy, max_freqy);

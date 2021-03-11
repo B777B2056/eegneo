@@ -7,6 +7,7 @@ PSD::PSD(int c, double s, QWidget *parent) :
     ui(new Ui::PSD)
 {
     ui->setupUi(this);
+    this->setWindowTitle("功率谱密度");
 }
 
 PSD::~PSD()
@@ -67,9 +68,11 @@ void PSD::initChart()
     //设置x轴
     axisX->setRange(startFreq, stopFreq);
     axisX->setTickCount(5);
+    axisX->setTitleText("频率/Hz");
     chart->addAxis(axisX, Qt::AlignBottom);
     //设置y轴
     axisY->setRange(-100, 40);
+    axisY->setTitleText(this->type == Log ? "幅值/dB" : "幅值uV^2/Hz");
     chart->addAxis(axisY, Qt::AlignLeft);
     //链接数据
     for(int i = 0; i < channelNum; i++)

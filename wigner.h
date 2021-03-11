@@ -26,11 +26,11 @@ private slots:
     void getChannel(QString);
 
 private:
-    int channelNum;
+    int m, channelNum;
     double beginTime, endTime, sampleFreq;
     QString channel;
     QChart **chart;
-    QSplineSeries **series;
+    QSplineSeries **series[2];
     QValueAxis **axisX, **axisY;
     void initChart(int index);
     int findMin2(int up);  // 找到与起始时间最接近的2的幂次方整数
