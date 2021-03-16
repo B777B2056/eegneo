@@ -460,8 +460,8 @@
      <string>数据分析</string>
     </property>
     <addaction name="actionPSD"/>
-    <addaction name="actionDWT"/>
     <addaction name="actionWigner"/>
+    <addaction name="actionDWT"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">

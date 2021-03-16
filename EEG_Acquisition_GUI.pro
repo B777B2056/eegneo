@@ -25,6 +25,7 @@ SOURCES += \
     acquisitionwindow.cpp \
     analysistools.cpp \
     charthelp.cpp \
+    dwtinfo.cpp \
     edflib.c \
     filter.cpp \
     filtersetting.cpp \
@@ -47,6 +48,7 @@ HEADERS += \
     acquisitionwindow.h \
     analysistools.h \
     charthelp.h \
+    dwtinfo.h \
     edflib.h \
     filter.h \
     filtersetting.h \
@@ -67,6 +69,7 @@ HEADERS += \
 FORMS += \
     acquisitionwindow.ui \
     charthelp.ui \
+    dwtinfo.ui \
     filtersetting.ui \
     mainbackground.ui \
     mainwindow.ui \
@@ -85,4 +88,5 @@ TRANSLATIONS += \
     EEG_Acquisition_GUI_zh_CN.ts
 
 DISTFILES += \
-    dataformatload.py
+    dataformatload.py \
+    tf.py

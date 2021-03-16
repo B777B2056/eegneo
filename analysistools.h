@@ -12,4 +12,15 @@
  */
 void fft(double *x, double *y, int n, int sign);
 
+/* 离散小波变换
+ * g 尺度系数，长度为wlen
+ * h 小波系数，长度为wlen
+ * wlen 小波序列长度
+ * c 原始信号(输入)与小波分解的平滑信号(输出)
+ * d 小波分解的细节信号
+ * m 小波分解级数
+ * sca 小波分解时每级数据长度，sca[0]是原始信号长度，sca[i]是小波分解时第i级数据长度，长度为m+1
+ */
+void dwt(double *g, double *h, int wlen, double *c, double *d, int m, double *sca);
+
 #endif // ANALYSISTOOLS_H

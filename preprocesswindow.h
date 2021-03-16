@@ -20,6 +20,7 @@
 #include "psd.h"
 #include "wigner.h"
 #include "psdinfo.h"
+#include "dwtinfo.h"
 #include <Python.h>
 
 #include "wignerinfo.h"
@@ -63,6 +64,9 @@ private slots:
     void getEndTime(double);
     void getChannel(QString);
     void plotWigner();  // 绘制单通道维格纳分布图
+    void getFreqMin(double);
+    void getFreqMax(double);
+    void plotDWT();  // 绘制基于Morlet小波变换的时频图
     void on_comboBox_2_currentIndexChanged(int index);
     void on_pushButton_4_clicked();
     void on_pushButton_5_clicked();
@@ -79,6 +83,7 @@ private:
     int maxVotagle;  // 最大电压
     int startTimePSD, stopTimePSD;  // 功率谱起始、结束时间
     int startTimeWigner, endTimeWigner;  // Wigner起始、终止时间
+    int freqMin, freqMax;  // DWT所需的起始与终止频率
     double sampleFreq;  // 采样率
     double lowPass, highPass;  // 滤波器低、高通频率
     double start, end, jmp_start, jmp_end;  // 波形显示区间
@@ -86,8 +91,13 @@ private:
     bool hasOpen;  // 是否已经展示过波形
     bool isJmp;  // 是否进行区间跳转
     bool isOverlapping;  // 波形是否已经重叠
-    QString channelWigner;  // 绘制Wigner分布的通道名称
+    QString filePath;  // 导入的文件路径
+    QString channel;  // 待进行时频分析的通道名称
+    PSDInfo *psi;
     PSD *p;
+    WignerInfo *wi;
+    Wigner *w;
+    DwtInfo *di;
     std::string *channelsName;
     ChartHelp *help;  // 绘图帮助类，存放chartview
     std::vector<QSplineSeries *> series;

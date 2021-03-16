@@ -67,3 +67,29 @@ void fft(double *x, double *y, int n, int sign)
         }
     }
 }
+
+void dwt(double *g, double *h, int wlen, double *c, double *d, int m, double *sca)
+{
+    int i, j, k, mid, flag[20];
+    double p, q;
+    flag[0] = 0;
+    for(i = 0; i < m; i++)
+        flag[i + 1] = flag[i] + sca[i];
+    for(j = 1; j <= m; j++)
+    {
+        for(i = 0; i < sca[j]; i++)
+        {
+            p = q = 0;
+            for(k = 0; k < wlen; k++)
+            {
+                mid = k + 2 * i;
+                if(mid >= sca[j - 1])
+                    mid -= sca[j - 1];
+                p += h[k] * c[flag[j - 1] + mid];
+                q += g[k] * c[flag[j - 1] + mid];
+            }
+            c[flag[j] + i] = p;
+            d[flag[j] + i] = q;
+        }
+    }
+}

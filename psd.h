@@ -6,6 +6,7 @@
 #include <QMessageBox>
 #include <cmath>
 #include <vector>
+#include "analysistools.h"
 #include "psdinfo.h"
 
 namespace Ui {
@@ -36,14 +37,6 @@ private:
     QValueAxis *axisX, *axisY;
     /*绘图初始化*/
     void initChart();
-    /* 快速傅里叶变换
-     * x 数据的实部
-     * y 数据虚部
-     * n 数据长度
-     * sign 1 离散傅里叶正变换DFT
-     *     -1 离散傅里叶反变换IDFT
-     */
-    void fft(double *x, double *y, int n, int sign);
     /* 计算功率谱面密度
      * x 输入信号数组
      * len 输入信号数组长度

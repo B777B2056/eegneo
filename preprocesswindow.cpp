@@ -4,15 +4,16 @@
 
 PreprocessWindow::PreprocessWindow(QWidget *parent) :
     QMainWindow(parent),
-    interval(1), channelNum(1), maxVotagle(50), startTimePSD(0.0), stopTimePSD(0.0),
-    start(0.0), end(5.0), jmp_start(-1.0), jmp_end(-1.0), allTime(0.0),
+    interval(1), channelNum(1), maxVotagle(50),
+    startTimePSD(0.0), stopTimePSD(0.0), freqMin(0), freqMax(0), start(0.0), end(5.0), jmp_start(-1.0), jmp_end(-1.0), allTime(0.0),
     hasOpen(false), isJmp(false), isOverlapping(false),
     channelsName(nullptr),
     ui(new Ui::PreprocessWindow)
 {
     ui->setupUi(this);
     /*设置python.exe所在路径*/
-    Py_SetPythonHome(L"E:\\Anaconda3\\");
+    Py_SetPythonHome(L"E:\\Anaconda3");
+    Py_Initialize();
     /*链接信号与槽*/
     connect(this, SIGNAL(returnMain()), parent, SLOT(goToMainWindow()));
     connect(ui->actionlocalFile, SIGNAL(triggered()), this, SLOT(readDataFromLocal()));
@@ -22,10 +23,12 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
     connect(ui->actionFIR, SIGNAL(triggered()), this, SLOT(filt()));
     connect(ui->actionPSD, SIGNAL(triggered()), this, SLOT(plotPSD()));
     connect(ui->actionWigner, SIGNAL(triggered()), this, SLOT(plotWigner()));
+    connect(ui->actionDWT, SIGNAL(triggered()), this, SLOT(plotDWT()));
 }
 
 PreprocessWindow::~PreprocessWindow()
 {
+    Py_Finalize();
     std::size_t i;
     for(i = 0; i < series.size(); i++)
         delete series[i];
@@ -38,6 +41,9 @@ PreprocessWindow::~PreprocessWindow()
     delete chart;
     delete help;
     delete p;
+    delete psi;
+    delete wi;
+    delete w;
     delete ui;
 }
 
@@ -268,27 +274,26 @@ void PreprocessWindow::readEDForBDF()
     if(!eventLines.empty())
         eventLines.clear();
     /*用户选择文件路径*/
-    QString filename;
-    filename = QFileDialog::getOpenFileName(this,
+    filePath = QFileDialog::getOpenFileName(this,
         tr("选择edf文件"),
         "",
         tr("*.edf *.EDF"));
-    if(filename.isEmpty())
+    if(filePath.isEmpty())
     {
         return;
     }
     /*初始化*/
-    Py_Initialize();
     if (!Py_IsInitialized())
     {
-        QMessageBox::critical(this, this->tr("错误"), "模块初始化错误!", QMessageBox::Ok);
+        QMessageBox::critical(this, this->tr("错误"), "模块加载错误!", QMessageBox::Ok);
         return;
     }
     PyObject *pModule, *pFun, *arg, *error, *sf, *cnList, *eventList, *eventDict, *key, *value, *dataList, *timeList;
     pModule = PyImport_ImportModule("dataformatload");
     if (!pModule)
     {
-        QMessageBox::critical(this, this->tr("错误"), "打不开Python目标");
+        QMessageBox::critical(this, this->tr("错误"), "Python目标模块无法打开");
+        return;
     }
    pFun= PyObject_GetAttrString(pModule,"readRawEDF");
    if(!pFun)
@@ -306,17 +311,16 @@ void PreprocessWindow::readEDForBDF()
        if(sec.exec() == QDialog::Accepted)
        {
            eventChannel = sec.eventChannel.toStdString();
-           arg = Py_BuildValue("(ss)", filename.toStdString().c_str(), eventChannel.c_str());
+           arg = Py_BuildValue("(ss)", filePath.toStdString().c_str(), eventChannel.c_str());
        }
        else
        {
-           Py_Finalize();
            return;
        }
    }
    else
    {
-       arg = Py_BuildValue("(s)", filename.toStdString().c_str());
+       arg = Py_BuildValue("(s)", filePath.toStdString().c_str());
    }
    PyObject_CallObject(pFun, arg);
    pFun= PyObject_GetAttrString(pModule,"getErrorFlag");
@@ -324,7 +328,6 @@ void PreprocessWindow::readEDForBDF()
    if(PyLong_AsLong(error) != 0)
    {
        QMessageBox::critical(this, this->tr("错误"), "该事件通道不存在！", QMessageBox::Ok);
-       Py_Finalize();
        return;
    }
    int i, j, cnLen, eventListLen, dataListLen0, dataListLen1;
@@ -390,7 +393,6 @@ void PreprocessWindow::readEDForBDF()
            samplePoints[i].push_back(QPointF(PyFloat_AsDouble(PyList_GetItem(timeList, j)), PyFloat_AsDouble(PyList_GetItem(row, j))));
        }
    }
-   Py_Finalize();
    /*设置标志量*/
    channelNum = ((eventIndex == -1) ? cnLen : cnLen - 1);
    allTime = PyFloat_AsDouble(PyList_GetItem(timeList, dataListLen1 - 1));
@@ -823,7 +825,7 @@ void PreprocessWindow::getStopTimePSD(double a)
 
 void PreprocessWindow::plotPSD()
 {
-    PSDInfo *psi = new PSDInfo(this);
+    psi = new PSDInfo(this);
     p = new PSD(channelNum, sampleFreq);
     connect(psi, SIGNAL(sendStartTime(double)), this, SLOT(getStartTimePSD(double)));
     connect(psi, SIGNAL(sendStopTime(double)), this, SLOT(getStopTimePSD(double)));
@@ -874,13 +876,13 @@ void PreprocessWindow::getEndTime(double a)
 
 void PreprocessWindow::getChannel(QString a)
 {
-    this->channelWigner = a;
+    this->channel = a;
 }
 
 void PreprocessWindow::plotWigner()
 {
-    WignerInfo *wi = new WignerInfo(this);
-    Wigner *w = new Wigner(channelNum, sampleFreq);
+    wi = new WignerInfo(this);
+    w = new Wigner(channelNum, sampleFreq);
     connect(wi, SIGNAL(sendBeginTime(double)), this, SLOT(getBeginTime(double)));
     connect(wi, SIGNAL(sendEndTime(double)), this, SLOT(getEndTime(double)));
     connect(wi, SIGNAL(sendBeginTime(double)), w, SLOT(getBeginTime(double)));
@@ -894,7 +896,7 @@ void PreprocessWindow::plotWigner()
         bool isFind = false;
         for(i = 0; i < channelNum; i++)
         {
-            if(channelWigner.toStdString() == channelsName[i])
+            if(channel.toStdString() == channelsName[i])
             {
                 isFind = true;
                 break;
@@ -912,11 +914,81 @@ void PreprocessWindow::plotWigner()
                     ++k;
                 }
             }
-            std::cout << points.size();
             w->plotWigner(points);
             w->show();
         }
         else
             QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+    }
+}
+
+void PreprocessWindow::getFreqMin(double a)
+{
+    this->freqMin = a;
+    if(!this->freqMin)
+        ++(this->freqMin);
+}
+
+void PreprocessWindow::getFreqMax(double a)
+{
+    this->freqMax = a;
+}
+
+void PreprocessWindow::plotDWT()
+{
+    di = new DwtInfo(this);
+    connect(di, SIGNAL(sendFreqMin(double)), this, SLOT(getFreqMin(double)));
+    connect(di, SIGNAL(sendFreqMax(double)), this, SLOT(getFreqMax(double)));
+    connect(di, SIGNAL(sendChannel(QString)), this, SLOT(getChannel(QString)));
+    //模块初始化
+    if (!Py_IsInitialized())
+    {
+        QMessageBox::critical(this, this->tr("错误"), "模块加载错误!", QMessageBox::Ok);
+        return;
+    }
+    PyObject *pModule, *pFun, *arg, *error;
+    pModule = PyImport_ImportModule("dataformatload");
+    if (!pModule)
+    {
+        QMessageBox::critical(this, this->tr("错误"), "打不开Python目标");
+    }
+    pFun = PyObject_GetAttrString(pModule,"plotDWT");
+    if(!pFun)
+    {
+        QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
+        return;
+    }
+   //绘图
+    if(di->exec() == QDialog::Accepted)
+    {
+        // 判断参数是否合法
+        int i;
+        bool isFind = false;
+        for(i = 0; i < channelNum; i++)
+        {
+            if(channel.toStdString() == channelsName[i])
+            {
+                isFind = true;
+                break;
+            }
+        }
+        if(isFind && (freqMin > 0) && (freqMax > freqMin))
+        {
+            arg = Py_BuildValue("(siis)", filePath.toStdString().c_str(), freqMin, freqMax, channel.toStdString().c_str());
+            PyObject_CallObject(pFun, arg);
+            pFun= PyObject_GetAttrString(pModule,"getErrorFlag");
+            error = PyObject_CallFunction(pFun, nullptr);
+            if(PyLong_AsLong(error) != 0)
+            {
+                QMessageBox::critical(this, this->tr("错误"), "输入信号长度至少应大于小波长度", QMessageBox::Ok);
+                Py_Finalize();
+                return;
+            }
+        }
+        else
+        {
+            QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+            return;
+        }
     }
 }
