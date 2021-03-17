@@ -950,15 +950,9 @@ void PreprocessWindow::plotDWT()
     pModule = PyImport_ImportModule("dataformatload");
     if (!pModule)
     {
-        QMessageBox::critical(this, this->tr("错误"), "打不开Python目标");
+        QMessageBox::critical(this, this->tr("错误"), "Python目标模块无法打开！");
     }
-    pFun = PyObject_GetAttrString(pModule,"plotDWT");
-    if(!pFun)
-    {
-        QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
-        return;
-    }
-   //绘图
+    //绘图
     if(di->exec() == QDialog::Accepted)
     {
         // 判断参数是否合法
@@ -974,14 +968,19 @@ void PreprocessWindow::plotDWT()
         }
         if(isFind && (freqMin > 0) && (freqMax > freqMin))
         {
-            arg = Py_BuildValue("(siis)", filePath.toStdString().c_str(), freqMin, freqMax, channel.toStdString().c_str());
+            arg = Py_BuildValue("(iis)", freqMin, freqMax, channel.toStdString().c_str());
+            pFun = PyObject_GetAttrString(pModule,"plotDWT");
+            if(!pFun)
+            {
+                QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
+                return;
+            }
             PyObject_CallObject(pFun, arg);
             pFun= PyObject_GetAttrString(pModule,"getErrorFlag");
             error = PyObject_CallFunction(pFun, nullptr);
             if(PyLong_AsLong(error) != 0)
             {
                 QMessageBox::critical(this, this->tr("错误"), "输入信号长度至少应大于小波长度", QMessageBox::Ok);
-                Py_Finalize();
                 return;
             }
         }
