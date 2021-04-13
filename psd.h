@@ -25,13 +25,13 @@ public:
 private slots:
     void getStartFreq(double);
     void getStopFreq(double);
-    void getPSDType(PSD_Type);
+    void getPSDType(PSDType);
 
 private: 
     int channelNum;
     double startFreq, stopFreq, sampleFreq;
     std::vector<double> minPSD, maxPSD;
-    PSD_Type type;
+    PSDType type;
     QChart *chart;
     QSplineSeries **series;
     QValueAxis *axisX, *axisY;

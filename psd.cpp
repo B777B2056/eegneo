@@ -28,7 +28,7 @@ void PSD::getStopFreq(double a)
     this->stopFreq = a;
 }
 
-void PSD::getPSDType(PSD_Type a)
+void PSD::getPSDType(PSDType a)
 {
     this->type = a;
 }

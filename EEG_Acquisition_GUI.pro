@@ -1,6 +1,6 @@
-QT       += core gui charts
+QT       += core gui charts network
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+greaterThan(QT_MAJOR_VERSION, 5): QT += widgets
 
 CONFIG += c++11
 
@@ -9,7 +9,7 @@ CONFIG += c++11
 # depend on your compiler). Please consult the documentation of the
 # deprecated API in order to know how to port your code away from it.
 DEFINES += QT_DEPRECATED_WARNINGS
-
+include(C:/Users/19373/qextserialport/src/qextserialport.pri)
 # You can also make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
@@ -25,6 +25,7 @@ SOURCES += \
     acquisitionwindow.cpp \
     analysistools.cpp \
     charthelp.cpp \
+    choosecom.cpp \
     dwtinfo.cpp \
     edflib.c \
     filter.cpp \
@@ -48,8 +49,10 @@ HEADERS += \
     acquisitionwindow.h \
     analysistools.h \
     charthelp.h \
+    choosecom.h \
     dwtinfo.h \
     edflib.h \
+    enum.h \
     filter.h \
     filtersetting.h \
     mainbackground.h \
@@ -69,6 +72,7 @@ HEADERS += \
 FORMS += \
     acquisitionwindow.ui \
     charthelp.ui \
+    choosecom.ui \
     dwtinfo.ui \
     filtersetting.ui \
     mainbackground.ui \
@@ -89,4 +93,3 @@ TRANSLATIONS += \
 
 DISTFILES += \
     dataformatload.py \
-    tf.py

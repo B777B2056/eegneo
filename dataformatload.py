@@ -91,3 +91,7 @@ def getTime():
 
 def getErrorFlag():
     return ERROR_FLAG
+
+raw = mne.io.read_raw_fif('C:\\Users\\19373\\Desktop\\Python上位机安装与展示\\Python上位机安装与展示\\Python上位机3.0\\eeg_viewer\\data\\Records\\fif\\2021_01_23_17_50_55-raw.fif')
+raw.plot()
+matplotlib.pyplot.show()

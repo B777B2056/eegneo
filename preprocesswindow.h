@@ -53,7 +53,7 @@ public slots:
 private slots:
     void on_pushButton_clicked();
     void readDataFromLocal();  // 从本程序缓存文件读取数据
-    void readEDForBDF();  // 读取EDF/EDF+/BDF文件
+    void readEDF();  // 读取EDF/EDF+/BDF文件
     void readEEG();  // 读取CNT格式文件
     void setChannelsName();
     void filt();  // 滤波
@@ -104,6 +104,7 @@ private:
     QValueAxis *axisX;
     QCategoryAxis *axisY;
     QChart *chart;
+    PyObject *pModule, *pFun, *arg, *error, *list;
     std::map<int, std::vector<QPointF>> samplePoints;  // 数据点
     std::map<std::string, QColor> markColors;  // 不同的mark直线对应的颜色
     std::vector<std::pair<std::string, double>> eventLines;  // 事件直线

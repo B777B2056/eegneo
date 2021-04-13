@@ -2,12 +2,11 @@
 #define PSDINFO_H
 
 #include <QDialog>
+#include "enum.h"
 
 namespace Ui {
 class PSDInfo;
 }
-
-enum PSD_Type { EMPTY, Linear, Log };
 
 class PSDInfo : public QDialog
 {
@@ -18,7 +17,7 @@ signals:
     void sendStopTime(double);
     void sendStartFreq(double);
     void sendStopFreq(double);
-    void sendPSDType(PSD_Type);
+    void sendPSDType(PSDType);
 
 public:
     explicit PSDInfo(QWidget *parent = nullptr);

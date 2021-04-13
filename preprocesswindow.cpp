@@ -13,11 +13,22 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
     ui->setupUi(this);
     /*设置python.exe所在路径*/
     Py_SetPythonHome(L"E:\\Anaconda3");
+    //模块初始化
     Py_Initialize();
+    if (!Py_IsInitialized())
+    {
+        QMessageBox::critical(this, this->tr("错误"), "模块加载错误!", QMessageBox::Ok);
+        return;
+    }
+    pModule = PyImport_ImportModule("dataformatload");
+    if (!pModule)
+    {
+        QMessageBox::critical(this, this->tr("错误"), "目标模块无法打开！");
+    }
     /*链接信号与槽*/
     connect(this, SIGNAL(returnMain()), parent, SLOT(goToMainWindow()));
     connect(ui->actionlocalFile, SIGNAL(triggered()), this, SLOT(readDataFromLocal()));
-    connect(ui->actionedf, SIGNAL(triggered()), this, SLOT(readEDForBDF()));
+    connect(ui->actionedf, SIGNAL(triggered()), this, SLOT(readEDF()));
     connect(ui->actioneeg_2, SIGNAL(triggered()), this, SLOT(readEEG()));
     connect(ui->actionrenameMotage, SIGNAL(triggered()), this, SLOT(setChannelsName()));
     connect(ui->actionFIR, SIGNAL(triggered()), this, SLOT(filt()));
@@ -28,7 +39,6 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
 
 PreprocessWindow::~PreprocessWindow()
 {
-    Py_Finalize();
     std::size_t i;
     for(i = 0; i < series.size(); i++)
         delete series[i];
@@ -84,11 +94,9 @@ void PreprocessWindow::readDataFromLocal()
     QString samplesFile, eventsFile;
     std::string allEvents = "";
     std::ifstream data_file, event_file;
-    if(tempFile != "")
-    {
-        samplesFile = tempFile + "_samples.txt";
-        eventsFile = tempFile + "_events.txt";
-    }
+    samplesFile = tempFile + "_samples.txt";
+    eventsFile = tempFile + "_events.txt";
+    std::cout << samplesFile.toStdString() << std::endl;
     QFile file1(samplesFile), file2(eventsFile);
     if (tempFile == "" || !file1.exists() || !file2.exists())
     {
@@ -112,6 +120,7 @@ void PreprocessWindow::readDataFromLocal()
             return;
         }
     }
+    list = PyList_New(0);
     data_file.open(samplesFile.toStdString(), std::ios::in);
     /*计算总时间*/
     while(data_file.peek() != EOF)
@@ -137,6 +146,7 @@ void PreprocessWindow::readDataFromLocal()
                 double m;
                 ss >> m;
                 samplePoints[j].push_back(QPointF((double)col / (double)sampleFreq, m));
+                PyList_Append(list, Py_BuildValue("d", m));
             }
         }
         else
@@ -206,68 +216,22 @@ void PreprocessWindow::readDataFromLocal()
     hasOpen = true;
     /*画图*/
     paintChart();
+    /*导出raw对象*/
+    arg = PyTuple_New(3);
+    PyTuple_SetItem(arg, 0, Py_BuildValue("i", channelNum));
+    PyTuple_SetItem(arg, 1, Py_BuildValue("d", sampleFreq));
+    PyTuple_SetItem(arg, 2, list);
+    pFun = PyObject_GetAttrString(pModule, "makeRaw");
+    if(!pFun)
+    {
+        QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
+        return;
+    }
+    PyObject_CallObject(pFun, arg);
 }
 
-/*从外部EDF/EDF+/BDF文件读取数据*/
-//void PreprocessWindow::readEDForBDF()
-//{
-//    if(!samplePoints.empty())
-//        samplePoints.clear();
-//    if(!eventLines.empty())
-//        eventLines.clear();
-//    /*用户选择文件路径*/
-//    QString filename;
-//    filename = QFileDialog::getOpenFileName(this,
-//        tr("选择EDF/EDF+/BDF文件"),
-//        "",
-//        tr("*.edf *.edf+ *.bdf")); //选择路径
-//    if(filename.isEmpty())
-//    {
-//        return;
-//    }
-//    /*读取EDF/EDF+头文件信息并显示*/
-//    edf_hdr_struct ehs;  // 头文件信息保存的结构体
-//    int flag = edfopen_file_readonly(filename.toStdString().c_str(), &ehs, EDFLIB_READ_ALL_ANNOTATIONS);
-//    sampleFreq = ehs.signalparam[0].smp_in_datarecord/(ehs.datarecord_duration/10000000);
-//    allTime = ehs.file_duration / (double)EDFLIB_TIME_DIMENSION;
-//    channelNum = ehs.edfsignals;
-//    ui->label_5->setText(QString::number(channelNum));
-//    ui->label_7->setText(QString::number(ehs.annotations_in_file));
-//    ui->label_9->setText("1");
-//    ui->label_11->setText(QString::number(sampleFreq) + "Hz");
-//    ui->label_13->setText(QString::number(allTime) + "s");
-//    /*读取数据点*/
-//    int samplesNum = allTime * sampleFreq;
-//    for(int i = 0; i < channelNum; i++)
-//    {
-//        double *buf = new double[samplesNum];
-//        edfread_physical_samples(flag, i, samplesNum, buf);
-//        for(int j = 0; j < samplesNum; j++)
-//        {
-//            samplePoints[i].push_back(QPointF((double)j / sampleFreq, buf[j]));
-//        }
-//        delete []buf;
-//    }
-//    /*读取事件*/
-//    for(int i = 1; i < ehs.annotations_in_file; i++)
-//    {
-//        edf_annotation_struct eas;
-//        edf_get_annotation(flag, i, &eas);
-//        eventLines.push_back(std::make_pair(std::string(eas.annotation), eas.onset / (double)EDFLIB_TIME_DIMENSION));
-//    }
-//    /*关闭文件*/
-//    edfclose_file(flag);
-//    /*内存分配*/
-//    channelsName = new std::string[channelNum];
-//    for(int i = 0; i < channelNum; i++)
-//        channelsName[i] = std::to_string(i + 1);
-//    /*绘图板初始化*/
-//    initChart(ehs.annotations_in_file);
-//    hasOpen = true;
-//    /*画图*/
-//    paintChart();
-//}
-void PreprocessWindow::readEDForBDF()
+/*从外部EDF/EDF+文件读取数据*/
+void PreprocessWindow::readEDF()
 {
     if(!samplePoints.empty())
         samplePoints.clear();
@@ -282,19 +246,7 @@ void PreprocessWindow::readEDForBDF()
     {
         return;
     }
-    /*初始化*/
-    if (!Py_IsInitialized())
-    {
-        QMessageBox::critical(this, this->tr("错误"), "模块加载错误!", QMessageBox::Ok);
-        return;
-    }
-    PyObject *pModule, *pFun, *arg, *error, *sf, *cnList, *eventList, *eventDict, *key, *value, *dataList, *timeList;
-    pModule = PyImport_ImportModule("dataformatload");
-    if (!pModule)
-    {
-        QMessageBox::critical(this, this->tr("错误"), "Python目标模块无法打开");
-        return;
-    }
+    PyObject *sf, *cnList, *eventList, *eventDict, *key, *value, *dataList, *timeList;
    pFun= PyObject_GetAttrString(pModule,"readRawEDF");
    if(!pFun)
    {
@@ -806,6 +758,15 @@ void PreprocessWindow::filt()
             }
             // 重新绘图
             paintChart();
+            // raw对象滤波
+            arg = Py_BuildValue("(dd)", lowPass, highPass);
+            pFun = PyObject_GetAttrString(pModule,"filt");
+            if(!pFun)
+            {
+                QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
+                return;
+            }
+            PyObject_CallObject(pFun, arg);
         }
         else
             QMessageBox::critical(this, this->tr("错误"), "所需信息未填写或数值错误！", QMessageBox::Ok);
@@ -831,7 +792,7 @@ void PreprocessWindow::plotPSD()
     connect(psi, SIGNAL(sendStopTime(double)), this, SLOT(getStopTimePSD(double)));
     connect(psi, SIGNAL(sendStartFreq(double)), p, SLOT(getStartFreq(double)));
     connect(psi, SIGNAL(sendStopFreq(double)), p, SLOT(getStopFreq(double)));
-    connect(psi, SIGNAL(sendPSDType(PSD_Type)), p, SLOT(getPSDType(PSD_Type)));
+    connect(psi, SIGNAL(sendPSDType(PSDType)), p, SLOT(getPSDType(PSDType)));
     if(psi->exec() == QDialog::Accepted)
     {
         if((stopTimePSD == 0.0) || (stopTimePSD > allTime))
@@ -846,7 +807,7 @@ void PreprocessWindow::plotPSD()
         double *points[channelNum];
         for(k = 0; k < channelNum; k++)
             points[k] = new double[len];
-        std::map<int, std::vector<QPointF>>::iterator sample_iter;
+        std::map<int, std::vector<QPointF> >::iterator sample_iter;
         for(sample_iter = samplePoints.begin(); sample_iter != samplePoints.end(); sample_iter++)
         {
             k = 0;
@@ -940,18 +901,6 @@ void PreprocessWindow::plotDWT()
     connect(di, SIGNAL(sendFreqMin(double)), this, SLOT(getFreqMin(double)));
     connect(di, SIGNAL(sendFreqMax(double)), this, SLOT(getFreqMax(double)));
     connect(di, SIGNAL(sendChannel(QString)), this, SLOT(getChannel(QString)));
-    //模块初始化
-    if (!Py_IsInitialized())
-    {
-        QMessageBox::critical(this, this->tr("错误"), "模块加载错误!", QMessageBox::Ok);
-        return;
-    }
-    PyObject *pModule, *pFun, *arg, *error;
-    pModule = PyImport_ImportModule("dataformatload");
-    if (!pModule)
-    {
-        QMessageBox::critical(this, this->tr("错误"), "Python目标模块无法打开！");
-    }
     //绘图
     if(di->exec() == QDialog::Accepted)
     {

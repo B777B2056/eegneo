@@ -18,6 +18,8 @@
 #include "p300.h"
 #include "workthread.h"
 #include "charthelp.h"
+#include "enum.h"
+#include "choosecom.h"
 
 extern "C"
 {
@@ -31,13 +33,9 @@ namespace Ui { class AcquisitionWindow; }
 QT_END_NAMESPACE
 
 #define NO_BOARD  // 没板子宏
-#define GRAPH_FRESH 30  // 触发波形显示定时器的时间，单位为ms
+#define GRAPH_FRESH 1  // 触发波形显示定时器的时间，单位为ms
 #define IMPEDANCE_FRESH 2000  // 2s刷新一次阻抗
 #define MANUAL_MAKER 4 // 手动Mark数量
-
-/*颜色枚举*/
-enum background
-{Green, Yellow, Red};
 
 class AcquisitionWindow : public QMainWindow
 {
@@ -46,7 +44,6 @@ class AcquisitionWindow : public QMainWindow
 public:
     AcquisitionWindow(QWidget *parent = nullptr);
     ~AcquisitionWindow();
-
     void init();
 
 signals:
@@ -88,6 +85,10 @@ private slots:
 
     void isInFilt();  // 进入滤波，置信号灯为绿色
 
+    void setVoltage10();  // 设置各电导电压范围(-10~10uV)
+
+    void setVoltage25();  // 设置各电导电压范围(-25~25uV)
+
     void setVoltage50();  // 设置各电导电压范围(-50~50uV)
 
     void setVoltage100();  // 设置各电导电压范围(-100~100uV)
@@ -122,7 +123,7 @@ private slots:
 
 private:
     /*数据获取、存储与滤波子线程*/
-    GetDataThread *dataThread;
+    DataProcessThread *dpt;
 
     /*电导数量选择相关*/
     int channel_num;
@@ -130,6 +131,8 @@ private:
     std::vector<QLabel *> impDisplay;  // 阻抗数量
 
     /*与被试信息相关的私有成员*/
+    BoardType b;
+    int sp;
     QString participantNum, date, others, expName;  // 被试信息
 
     /*与阻抗测量相关的私有成员*/
@@ -145,7 +148,7 @@ private:
     double lowPassFres[7] = {8.0, 12.5, 16.5, 20.5, 28.0, 45.0, 50.0};  // 低通滤波频率选择
 
     /*与Marker相关的私有成员*/
-    std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>> marks;
+    std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *> > marks;
     std::string *markerNames;  // 手动marker标记名称
 
     /*与绘图相关的私有成员*/
@@ -153,12 +156,13 @@ private:
     int timeInterval;  // 波形显示的时间间隔，单位为s
     int threshold;  // 图上最多显示多少个数据点
     ChartHelp *help;  // 绘图帮助类，存放chartview
-    std::vector<QQueue<QPointF>> pointQueue;
+    std::vector<QQueue<QPointF> > pointQueue;
     QTimer *graphTimer; //图形渲染定时器
     std::vector<QSplineSeries *> series;
     std::vector<QDateTimeAxis *> axisX;
     std::vector<QValueAxis *> axisY;
     std::vector<QChart *> charts;
+    QList<QPointF> m_data;
     void initChart();  // 绘图初始化
     void updateWave(const std::vector<double>& channelData);  //更新波形
 

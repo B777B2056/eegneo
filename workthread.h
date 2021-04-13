@@ -1,56 +1,70 @@
 #ifndef WORKTHREAD_H
 #define WORKTHREAD_H
 
+#include <QTime>
 #include <QTimer>
 #include <QThread>
 #include <QQueue>
+#include <QProcess>
+#include <QTcpSocket>
+#include <QHostAddress>
+#include <QHostInfo>
+#include <QNetworkProxy>
 #include <vector>
+#include <cmath>
+#include <string>
 #include <fstream>
 #include <filter.h>
-
-#define NO_BOARD  // 没板子宏
+#include <iostream>
+#include "qextserialport.h"
+#include "enum.h"
 
 #define FILTER_ORDER 31 // 滤波器阶数(只能为奇数)
-#define SAMPLE_RATE 50  // 采样率
+//#define SAMPLE_RATE 1000  // 采样率
+#define QESP_NO_PORTABILITY_WARN
 
-/*滤波器枚举*/
-enum filter
-{BandPass, Notch};
-
-/*数据获取线程*/
-class GetDataThread : public QThread
+/*数据滤波与记录线程*/
+class DataProcessThread : public QThread
 {
     Q_OBJECT
 public:
-    GetDataThread(int channels_num);
-    ~GetDataThread();
+    DataProcessThread(int channels_num, int sampleRate, BoardType b, QString c="");
+    ~DataProcessThread();
 
 protected:
-    void run();
+    void run() override;
 
 private:
-    int msecCnt = 0;
-    int channels_num;
+    QTime qtime;
+    int channels_num, cnt = 0;
+    int sp;
+    const double cofe = 0.022351744455307063;
     bool isFilt, isRec;
+    BoardType board;
+    QTimer *d;
+    QString com;
+    QProcess *process;
+    QTcpSocket *client;
     std::ofstream samplesWrite;
-    QTimer *dataTimer;
+    QextSerialPort *port;
     std::vector<double> data, filtData;
     std::vector<QQueue<double>> bandPassBuffer, notchBuffer;  // 滤波时各通道数据缓存区，长度为滤波器阶数
     std::vector<double *> bandPassCoff, notchCoff;  // FIR I型带通滤波器与陷波器冲激响应
-    double conv(filter type, int index);
+    double conv(FilterType type, int index);
     void saveDataTEMP();
-#ifndef NO_BOARD
-    void getDataFromBoard();  // 获取实时更新的EEG数据
-#endif
+    void boardInit();
+    QString getLocalIP();
+    double turnIEEE754(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4);
+    double turnBytes2uV(char byte1, char byte2, char byte3);
 
 signals:
     void sendData(std::vector<double>);  // 发送数据至主线程
     void inFilt();  // 滤波数据已产生的信号
 
-#ifdef NO_BOARD
 private slots:
-    void generateData();  // 随机数产生随机数据
-#endif
+    void processData();  // 处理数据
+    void getDataFromShanxi();  // 获取实时更新的EEG数据(山西设备)
+    void getDataFromShanghai();  // 获取实时更新的EEG数据(上海设备)
 
 public slots:
     void startRec(std::string);

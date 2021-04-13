@@ -13,13 +13,14 @@ SetInfo::~SetInfo()
     delete ui;
 }
 
-void SetInfo::getInfo(QString& num_info, QString& date_info, QString& other_info, QString& exp_name, int& motange_num)
+void SetInfo::getInfo(QString& num_info, QString& date_info, QString& other_info, QString& exp_name, int& motange_num, BoardType& b)
 {
     num_info = this->num_info;
     date_info = this->date_info;
     other_info = this->other_info;
     exp_name = this->exp_name;
     motange_num = this->motange_num;
+    b = this->btype;
 }
 
 void SetInfo::on_num_editingFinished()
@@ -45,4 +46,19 @@ void SetInfo::on_exp_name_editingFinished()
 void SetInfo::on_comboBox_currentIndexChanged(int index)
 {
     motange_num = index * 8;
+}
+
+void SetInfo::on_comboBox_2_currentIndexChanged(int index)
+{
+    switch(index){
+        case 1:
+            btype = Shanxi;
+            break;
+        case 2:
+            btype = Shanghai;
+            break;
+        default:
+            btype = Null;
+            break;
+    }
 }

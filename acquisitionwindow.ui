@@ -426,6 +426,8 @@
      <property name="title">
       <string>各导电压</string>
      </property>
+     <addaction name="action_10_10uV"/>
+     <addaction name="action_25_25uV"/>
      <addaction name="action50uV"/>
      <addaction name="action100uV"/>
      <addaction name="action200uV"/>
@@ -540,6 +542,16 @@
   <action name="action0_10s">
    <property name="text">
     <string>0~10s</string>
+   </property>
+  </action>
+  <action name="action_10_10uV">
+   <property name="text">
+    <string>-10~10uV</string>
+   </property>
+  </action>
+  <action name="action_25_25uV">
+   <property name="text">
+    <string>-25~25uV</string>
    </property>
   </action>
  </widget>

@@ -72,7 +72,7 @@ P300Oddball::P300Oddball(QWidget *parent)
     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/gotask.jpg"));
     ui->label->show();
     //全屏显示
-    this->showFullScreen();
+//    this->showFullScreen();
 }
 
 P300Oddball::~P300Oddball()

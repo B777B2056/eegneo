@@ -5,7 +5,7 @@
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
-    , maxVoltage(50), timeInterval(5), threshold(200)
+    , maxVoltage(50), timeInterval(5), threshold(150)
     , eventCount(0), curLine(0), isRec(false), isSaveP300BH(false), isFinish(-1), tempFiles("")
     , ui(new Ui::AcquisitionWindow)
 {
@@ -47,6 +47,8 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     connect(ui->actionTXT, SIGNAL(triggered()), this, SLOT(saveTXT()));
     connect(ui->actionStop_Recording, SIGNAL(triggered()), this, SLOT(stopRec()));
     connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
+    connect(ui->action_10_10uV, SIGNAL(triggered()), this, SLOT(setVoltage10()));
+    connect(ui->action_25_25uV, SIGNAL(triggered()), this, SLOT(setVoltage25()));
     connect(ui->action50uV, SIGNAL(triggered()), this, SLOT(setVoltage50()));
     connect(ui->action100uV, SIGNAL(triggered()), this, SLOT(setVoltage100()));
     connect(ui->action200uV, SIGNAL(triggered()), this, SLOT(setVoltage200()));
@@ -58,8 +60,8 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 AcquisitionWindow::~AcquisitionWindow()
 {
     /*停止数据获取子线程*/
-    dataThread->quit();
-    dataThread->wait();
+    dpt->quit();
+    dpt->wait();
     /*释放内存*/
     std::vector<QLineSeries *> qls;
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
@@ -92,11 +94,11 @@ void AcquisitionWindow::init()
 {
     /*待用户输入基本信息*/
     SetInfo *siw = new SetInfo;
-Retry:
+Retry1:
     int rec = siw->exec();
-    siw->getInfo(participantNum, date, others, expName, channel_num);
+    siw->getInfo(participantNum, date, others, expName, channel_num, b);
     if(rec == QDialog::Accepted){
-        if(participantNum.isEmpty() || date.isEmpty() || expName.isEmpty() || !channel_num){
+        if(participantNum.isEmpty() || date.isEmpty() || expName.isEmpty() || !channel_num || (b == Null)){
             /*被试信息必须项缺失，弹出错误信息后返回*/
             QMessageBox::StandardButton reply;
             reply = QMessageBox::critical(siw, siw->tr("错误"),
@@ -108,7 +110,7 @@ Retry:
             }
             else
             {
-                goto Retry;
+                goto Retry1;
             }
         }
     }else{
@@ -118,14 +120,38 @@ Retry:
     /*被试信息初始化*/
     tempFiles += (participantNum.toStdString()+'_'+date.toStdString()+'_'+expName.toStdString()+'_'+others.toStdString());
     emit sendBasicInfo(participantNum, "temp files//" +participantNum+'_'+date+'_'+expName+'_'+others);
+    if(b == Shanxi)
+    {
+        sp = 1000;
+        dpt = new DataProcessThread(channel_num, sp, b);
+    }
+    else
+    {
+        sp = 250;
+        ChooseCom c;
+        QString com;
+    Retry2:
+        int rec = c.exec();
+        c.getCom(com);
+        if(rec == QDialog::Accepted){
+            if(com.isEmpty()){
+                /*被试信息必须项缺失，弹出错误信息后返回*/
+                QMessageBox::StandardButton reply;
+                reply = QMessageBox::critical(siw, siw->tr("错误"),
+                                                "请填写com口！",
+                                                QMessageBox::Retry);
+                goto Retry2;
+            }
+        }
+        dpt = new DataProcessThread(channel_num, sp, b, com);
+    }
     /*子线程初始化并开始*/
-    dataThread = new GetDataThread(channel_num);
-    connect(dataThread, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
-    connect(dataThread, SIGNAL(inFilt()), this, SLOT(isInFilt()));
-    connect(this, SIGNAL(doFilt(int, int, int)), dataThread, SLOT(startFilt(int, int, int)));
-    connect(this, SIGNAL(doRec(std::string)), dataThread, SLOT(startRec(std::string)));
-    connect(this, SIGNAL(doneRec()), dataThread, SLOT(stopRec()));
-    dataThread->start();
+    connect(dpt, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
+    connect(dpt, SIGNAL(inFilt()), this, SLOT(isInFilt()));
+    connect(this, SIGNAL(doFilt(int, int, int)), dpt, SLOT(startFilt(int, int, int)));
+    connect(this, SIGNAL(doRec(std::string)), dpt, SLOT(startRec(std::string)));
+    connect(this, SIGNAL(doneRec()), dpt, SLOT(stopRec()));
+    dpt->start();
     /*初始化vector*/
     for(int i = 0; i < channel_num; i++)
     {
@@ -231,7 +257,7 @@ void AcquisitionWindow::saveEDF()
     std::string edf_path;
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ifstream events_read;  // 标记缓存txt文件输入流
-    double *buf_persec = new double[channel_num * SAMPLE_RATE];
+    double *buf_persec = new double[channel_num * sp];
     std::string file_name = participantNum.toStdString()+'_'+date.toStdString()+'_'+others.toStdString();
     setFilePath(0, edf_path);
     //新建文件夹
@@ -246,7 +272,7 @@ void AcquisitionWindow::saveEDF()
     for(i = 0; i < channel_num; i++)
     {
         //设置各通道采样率
-        edf_set_samplefrequency(flag, i, SAMPLE_RATE);
+        edf_set_samplefrequency(flag, i, sp);
         //设置信号最大与最小数字值(EDF为16位文件，一般设置为-32768~32767)
         edf_set_digital_maximum(flag, i, 32767);
         edf_set_digital_minimum(flag, i, -32768);
@@ -269,13 +295,13 @@ void AcquisitionWindow::saveEDF()
             std::string str;
             std::getline(samples_read, str);
             std::stringstream ss(str);
-            for(int row = 0; row < SAMPLE_RATE; row++)
+            for(int row = 0; row < sp; row++)
             {
-              if(SAMPLE_RATE * row + col < channel_num * SAMPLE_RATE)
-                  ss >> buf_persec[SAMPLE_RATE * row + col];
+              if(sp* row + col < channel_num * sp)
+                  ss >> buf_persec[sp * row + col];
             }
             /*1s结束*/
-            if(!((col) % SAMPLE_RATE))
+            if(!((col) % sp))
             {
                 edf_blockwrite_physical_samples(flag, buf_persec);
                 col = 0;
@@ -284,9 +310,9 @@ void AcquisitionWindow::saveEDF()
         ++col;
     }
     /*写入多余的空数据以保证标记存在*/
-    for(i = 0; i < channel_num * SAMPLE_RATE; i++)
+    for(i = 0; i < channel_num * sp; i++)
        buf_persec[i] = 0.0;
-    for(i = 0; i < eventCount - curLine / SAMPLE_RATE + 1; i++)
+    for(i = 0; i < eventCount - curLine / sp + 1; i++)
         edf_blockwrite_physical_samples(flag, buf_persec);
     delete []buf_persec;
     //写入事件
@@ -415,7 +441,7 @@ void AcquisitionWindow::saveTXT()
     readme.open(txt_path + "\\" + file_name + "_readme.txt");
     readme.close();
     readme.open(txt_path + "\\" + file_name + "_readme.txt", std::ios::app);
-    readme << "Data sampling rate: " << SAMPLE_RATE << std::endl;
+    readme << "Data sampling rate: " << sp << std::endl;
     readme << "Number of channels: " << channel_num << std::endl;
     readme << "Input field(column) names: latency type" << std::endl;
     readme << "Number of file header lines: 1" << std::endl;
@@ -590,7 +616,7 @@ void AcquisitionWindow::createMark(const std::string event)
     if(isRec)
     {
         eventCount++;
-        double secs = 10000 * curLine / SAMPLE_RATE;
+        double secs = 10000 * curLine / sp;
         long long run_time = secs;
         /*写入缓存txt文件*/
         eventsWrite << run_time << " " + event << std::endl;
@@ -651,6 +677,25 @@ void AcquisitionWindow::initChart()
 }
 
 /*设置Y轴范围*/
+void AcquisitionWindow::setVoltage10()
+{
+    for(int index = 0; index < channel_num; index++)
+    {
+        charts[index]->axisY()->setRange(-10, 10);
+    }
+    maxVoltage = 10;
+}
+
+void AcquisitionWindow::setVoltage25()
+{
+    for(int index = 0; index < channel_num; index++)
+    {
+        charts[index]->axisY()->setRange(-25, 25);
+    }
+    maxVoltage = 25;
+}
+
+
 void AcquisitionWindow::setVoltage50()
 {
     for(int index = 0; index < channel_num; index++)
@@ -682,19 +727,19 @@ void AcquisitionWindow::setVoltage200()
 void AcquisitionWindow::setTime1()
 {
     timeInterval = 1;
-    threshold = 100;
+    threshold = 100 * timeInterval;
 }
 
 void AcquisitionWindow::setTime5()
 {
     timeInterval = 5;
-    threshold = 150;
+    threshold = 100 * timeInterval;
 }
 
 void AcquisitionWindow::setTime10()
 {
     timeInterval = 10;
-    threshold = 200;
+    threshold = 100 * timeInterval;
 }
 
 /*波形更新*/
@@ -712,7 +757,6 @@ void AcquisitionWindow::updateWave(const std::vector<double>& channelData)
         pointQueue[index].enqueue(QPointF(QDateTime::currentDateTime().toMSecsSinceEpoch(), channelData[index]));
         series[index]->replace(pointQueue[index]);
     }
-
 }
 
 void AcquisitionWindow::getImpedanceFromBoard()
@@ -727,7 +771,7 @@ void AcquisitionWindow::getImpedanceFromBoard()
     }
 }
 
-/*数据获取，暂用随机数方式代替实际方法*/
+/*数据获取*/
 void AcquisitionWindow::receiveData(std::vector<double> vec)
 {
     for(int i = 0; i < channel_num; i++)
@@ -754,7 +798,7 @@ void AcquisitionWindow::graphFresh()
     /*阻抗刷新*/
     for(int i = 0; i < channel_num; i++)
     {
-        background color;  // 背景色（0-20绿色，20-100黄色，100以上红色）
+        BackgroundColor color;  // 背景色（0-20绿色，20-100黄色，100以上红色）
         QString text;
         if(impedance[i] < 0)
         {
