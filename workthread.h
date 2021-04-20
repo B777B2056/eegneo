@@ -5,11 +5,10 @@
 #include <QTimer>
 #include <QThread>
 #include <QQueue>
-#include <QProcess>
-#include <QTcpSocket>
+//#include <QProcess>
+#include <QUdpSocket>
 #include <QHostAddress>
 #include <QHostInfo>
-#include <QNetworkProxy>
 #include <vector>
 #include <cmath>
 #include <string>
@@ -43,8 +42,8 @@ private:
     BoardType board;
     QTimer *d;
     QString com;
-    QProcess *process;
-    QTcpSocket *client;
+//    QProcess *process;
+    QUdpSocket *client;
     std::ofstream samplesWrite;
     QextSerialPort *port;
     std::vector<double> data, filtData;
@@ -54,8 +53,8 @@ private:
     void saveDataTEMP();
     void boardInit();
     QString getLocalIP();
-    double turnIEEE754(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4);
-    double turnBytes2uV(char byte1, char byte2, char byte3);
+    double _turnBytes2uV(char byte1, char byte2, char byte3);
+    double _turnBytes2uV(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4);
 
 signals:
     void sendData(std::vector<double>);  // 发送数据至主线程

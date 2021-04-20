@@ -19,8 +19,8 @@ DataProcessThread::DataProcessThread(int channels_num, int sampleRate, BoardType
 
 DataProcessThread::~DataProcessThread()
 {
-    process->kill();
-    delete process;
+//    process->kill();
+//    delete process;
     for(std::size_t i = 0; i < bandPassCoff.size(); i++)
     {
         delete []bandPassCoff[i];
@@ -42,27 +42,16 @@ void DataProcessThread::boardInit()
 {
     if(board == Shanxi)
     {
-        process->start("/dist/shanxi.exe");
-        process->waitForStarted();  // 等待程序确实启动
-        this->sleep(5);  // 等待服务器开启
-        client = new QTcpSocket(this);
+//        process->start("/dist/shanxi.exe");
+//        process->waitForStarted();  // 等待程序确实启动
+//        this->sleep(5);  // 等待服务器开启
+        client = new QUdpSocket(this);
         client->abort();
-        client->setProxy(QNetworkProxy::NoProxy);
-        client->connectToHost(QHostAddress(this->getLocalIP()), 4000);
+        client->bind(QHostAddress(getLocalIP()), 4000);
         connect(client, SIGNAL(readyRead()), this, SLOT(getDataFromShanxi()));
-        if(client->waitForConnected())
-        {
-            std::cout << "TCP connect succeed" << std::endl;
-            qtime.start();
-            client->waitForReadyRead();
-            std::cout << "Ready for reading data" << std::endl;
-        }
-        else
-        {
-            std::cout << client->errorString().toStdString() << std::endl;
-            std::cout << "TCP overtime" << std::endl;
-            return;
-        }
+        std::cout << "UDP client open" << std::endl;
+        qtime.start();
+        std::cout << "Ready for reading data" << std::endl;
     }
     else
     {
@@ -73,7 +62,7 @@ void DataProcessThread::boardInit()
             PAR_NONE,   // 奇偶校验位
             STOP_1,     // 停止位
             FLOW_OFF,   // 控制流
-            500         // 超时时间（ms）
+            100         // 超时时间（ms）
         };
         port = new QextSerialPort(com, my_setting, QextSerialPort::QueryMode::EventDriven);
         port->open(QIODevice::ReadWrite);
@@ -164,6 +153,7 @@ void DataProcessThread::boardInit()
         commands[2][70] = 0x58;
         port->write(commands[2]);
         port->write("b");
+        port->waitForReadyRead(1000);
     }
 }
 
@@ -172,7 +162,7 @@ QString DataProcessThread::getLocalIP()
     QString hostName = QHostInfo::localHostName();//本地主机名
     QHostInfo hostInfo = QHostInfo::fromName(hostName);
     QString  localIP = "";
-    QList<QHostAddress> addList = hostInfo.addresses();//
+    QList<QHostAddress> addList = hostInfo.addresses();
     for (int i = 0;i < addList.count(); i++)
     {
         QHostAddress aHost = addList.at(i);
@@ -185,96 +175,127 @@ QString DataProcessThread::getLocalIP()
     return localIP;
 }
 
+// 帧头：C0 A0
+// 帧尾：6个0
 void DataProcessThread::getDataFromShanxi()
 {
-    char bytes[8092];
-    int curChannel, size = client->read(bytes, 8092);
-    // 帧头：C0 A0
-    // 帧尾：6个0
-    for(int i = 0; i < size; i++)
+    while(client->hasPendingDatagrams())
     {
-        if((i < size - 1)
-                && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
+        char bytes[40];
+        int size = client->readDatagram(bytes, 40);
+        for(int i = 0; i < size; i++)
         {
-            if((i < size - 39)
-                    && (bytes[i + 34] == (char)0x00) && (bytes[i + 35] == (char)0x00)
-                    && (bytes[i + 36] == (char)0x00) && (bytes[i + 37] == (char)0x00)
-                    && (bytes[i + 38] == (char)0x00) && (bytes[i + 39] == (char)0x00))
+            if((i < size - 1)
+                    && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
             {
-                curChannel = 0;
-                for(int offset = 2; offset < 34; offset += 4)
+                if((i < size - 39)
+                        && (bytes[i + 34] == (char)0x00) && (bytes[i + 35] == (char)0x00)
+                        && (bytes[i + 36] == (char)0x00) && (bytes[i + 37] == (char)0x00)
+                        && (bytes[i + 38] == (char)0x00) && (bytes[i + 39] == (char)0x00))
                 {
-                    unsigned char byte1 = bytes[i + offset];
-                    unsigned char byte2 = bytes[i + offset + 1];
-                    unsigned char byte3= bytes[i + offset + 2];
-                    unsigned char byte4 = bytes[i + offset + 3];
-                    data[curChannel] = turnIEEE754(byte1, byte2, byte3, byte4);
-                    if(isRec)
+                    int curChannel = 0;
+                    for(int offset = 2; offset < 34; offset += 4)
                     {
-                        /*写入缓存txt文件*/
-                        if(curChannel < this->channels_num - 1)
-                            samplesWrite << data[curChannel] << " ";
-                        else
-                            samplesWrite << data[curChannel] << std::endl;
+                        data[curChannel] = _turnBytes2uV(bytes[i + offset], bytes[i + offset + 1],
+                                bytes[i + offset + 2], bytes[i + offset + 3]);
+                        if(isRec)
+                        {
+                            /*写入缓存txt文件*/
+                            if(curChannel < this->channels_num - 1)
+                                samplesWrite << data[curChannel] << " ";
+                            else
+                                samplesWrite << data[curChannel] << std::endl;
+                        }
+                        ++curChannel;
                     }
-                    ++curChannel;
+                    ++cnt;
+                    std::cout << "MATCH " << qtime.elapsed() / 1000.0 << " " << cnt << std::endl;
+                    i += 39;
                 }
-                ++cnt;
-                std::cout << "MATCH " << qtime.elapsed()/1000.0 << " " << cnt << std::endl;
-                i += 39;
             }
         }
     }
 }
 
+// 帧头：C0 A0
+// 帧尾：6个0
 void DataProcessThread::getDataFromShanghai()
 {
-    QByteArray bytes = port->readAll();
-    // 帧头：C0 A0
-    // 帧尾：6个0
-    int curChannel, size = bytes.size();
-    for(int i = 0; i < size; i++)
+    int cur_i = 0, cnt_0 = 0, cur_channel = 0, state_machine = 0;
+    char ch = 0, single_num[3];
+    while(port->read(&ch,1))
     {
-        if((i < size - 1)
-                && (bytes.at(i) == (char)0xc0) && (bytes.at(i + 1) == (char)0xa0))
+        if(state_machine == 0)
         {
-            if((i < size - 31)
-                    && (bytes[i + 26] == (char)0x00) && (bytes[i + 27] == (char)0x00)
-                    && (bytes[i + 28] == (char)0x00) && (bytes[i + 29] == (char)0x00)
-                    && (bytes[i + 30] == (char)0x00) && (bytes[i + 31] == (char)0x00))
+            if(ch == (char)0xc0)
+                state_machine = 1;
+            else
+                state_machine = 0;
+        }
+        else if(state_machine == 1)
+        {
+            if(ch == (char)0xa0)
+                state_machine = 2;
+            else
+                state_machine = 0;
+        }
+        else if(state_machine < 5)
+        {
+            if(cur_channel == 8)
             {
-                curChannel = 0;
-                for(int offset = 2; offset < 26; offset += 3)
+                state_machine = 5;
+                ++cnt;
+                std::cout << "MATCH, " << "Real receive = " << cnt << std::endl;
+                if(isRec)
                 {
-                    unsigned char byte1 = bytes[i + offset];
-                    unsigned char byte2 = bytes[i + offset + 1];
-                    unsigned char byte3= bytes[i + offset + 2];
-                    data[curChannel] = turnBytes2uV(byte1, byte2, byte3);
-                    if(isRec)
+                    for(int si = 0; si < channels_num; si++)
                     {
                         /*写入缓存txt文件*/
-                        if(curChannel < this->channels_num - 1)
-                            samplesWrite << data[curChannel] << " ";
+                        if(si < this->channels_num - 1)
+                            samplesWrite << data[si] << " ";
                         else
-                            samplesWrite << data[curChannel] << std::endl;
+                            samplesWrite << data[si] << std::endl;
                     }
-                    ++curChannel;
                 }
-                ++cnt;
-                std::cout << "MATCH " << cnt << std::endl;
-                i += 31;
             }
+            else
+            {
+                state_machine++;
+                if(cur_i == 3)
+                {
+                    cur_i = 0;
+                    data[cur_channel++] = _turnBytes2uV(single_num[0], single_num[1], single_num[2]);
+                }
+                else
+                    single_num[cur_i++] = ch;
+            }
+        }
+        else if(state_machine < 11)
+        {
+            if(ch == 0)
+            {
+                cnt_0++;
+                if(cnt_0 == 6)
+                {
+                    state_machine = 0;
+                    cnt_0 = 0;
+                }
+                else
+                    state_machine++;
+            }
+            else
+                state_machine = 0;
         }
     }
 }
 
-double DataProcessThread::turnBytes2uV(char byte1, char byte2, char byte3)
+double DataProcessThread::_turnBytes2uV(char byte1, char byte2, char byte3)
 {
     int target = ((int)byte1 << 16) + (((int)byte2 << 8) & 0x0000ffff) + ((int)byte3 & 0x000000ff);
     return (double)target * cofe;
 }
 
-double DataProcessThread::turnIEEE754(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4)
+double DataProcessThread::_turnBytes2uV(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4)
 {
     int i, exponent;
     unsigned int sign, mantissa;
@@ -306,7 +327,7 @@ double DataProcessThread::turnIEEE754(unsigned char byte1, unsigned char byte2, 
         for(i = 0; i < -exponent - 1; i++)
             str += '0';
         for(i = 0; i < (int)str.length(); i++)
-            curNum += ((str[str.length() - i - 1] - '0') * (pow(2, -i - 1)));
+            curNum += ((str[str.length() - i - 1] - '0') * pow(2, -i - 1));
     }
     curNum *= pow(-1, sign);
     return curNum;
