@@ -221,10 +221,11 @@ void DataProcessThread::getDataFromShanxi()
 // 帧尾：6个0
 void DataProcessThread::getDataFromShanghai()
 {
-    int cur_i = 0, cnt_0 = 0, cur_channel = 0, state_machine = 0;
+    int cur_channel = 0, state_machine = 0;
     char ch = 0, single_num[3];
     while(port->read(&ch,1))
     {
+        if(isRec)   std::cout << std::hex << (unsigned int)(unsigned char)ch << " ";
         if(state_machine == 0)
         {
             if(ch == (char)0xc0)
@@ -239,13 +240,17 @@ void DataProcessThread::getDataFromShanghai()
             else
                 state_machine = 0;
         }
-        else if(state_machine < 5)
+        else if(state_machine == 2)
+        {
+            state_machine = 3;
+        }
+        else if(state_machine < 28)
         {
             if(cur_channel == 8)
             {
-                state_machine = 5;
-                ++cnt;
-                std::cout << "MATCH, " << "Real receive = " << cnt << std::endl;
+//                ++cnt;
+//                std::cout << "MATCH, " << "Real receive = " << cnt << std::endl;
+                cur_channel = 0;
                 if(isRec)
                 {
                     for(int si = 0; si < channels_num; si++)
@@ -258,34 +263,20 @@ void DataProcessThread::getDataFromShanghai()
                     }
                 }
             }
-            else
-            {
-                state_machine++;
-                if(cur_i == 3)
-                {
-                    cur_i = 0;
-                    data[cur_channel++] = _turnBytes2uV(single_num[0], single_num[1], single_num[2]);
-                }
-                else
-                    single_num[cur_i++] = ch;
-            }
+            if(!((state_machine - 3) % 3) && (state_machine > 3))
+                data[cur_channel++] = _turnBytes2uV(single_num[0], single_num[1], single_num[2]);
+            single_num[(state_machine - 3) % 3] = ch;
+            state_machine++;
         }
-        else if(state_machine < 11)
+        else if(state_machine < 34)
         {
             if(ch == 0)
-            {
-                cnt_0++;
-                if(cnt_0 == 6)
-                {
-                    state_machine = 0;
-                    cnt_0 = 0;
-                }
-                else
-                    state_machine++;
-            }
+                state_machine++;
             else
                 state_machine = 0;
         }
+        else
+            state_machine = 0;
     }
 }
 
@@ -348,9 +339,8 @@ void DataProcessThread::processData()
             /*带通滤波*/
             else
             {
-                double bp_y_n;
                 /*计算滤波后的值*/
-                bp_y_n = conv(BandPass, i);
+                double bp_y_n = conv(BandPass, i);
                 /*队列左移一位*/
                 bandPassBuffer[i].dequeue();
                 /*原始值入队*/
@@ -368,8 +358,9 @@ void DataProcessThread::processData()
                     notchBuffer[i].enqueue(bp_y_n);
                     data[i] = y_n;
                 }
-
-                emit inFilt();
+                if(!filt_flag)
+                    emit inFilt();
+                filt_flag = 1;
             }
         }
     }
@@ -399,7 +390,8 @@ void DataProcessThread::stopRec()
 
 void DataProcessThread::startFilt(int lowCut, int highCut, int notchCut)
 {
-    this->isFilt = true;
+    filt_flag = 0;
+    isFilt = true;
     Filter f;
     for(std::size_t i = 0; i < data.size(); i++)
     {

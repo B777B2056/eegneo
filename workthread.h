@@ -18,7 +18,7 @@
 #include "qextserialport.h"
 #include "enum.h"
 
-#define FILTER_ORDER 31 // 滤波器阶数(只能为奇数)
+#define FILTER_ORDER 51 // 滤波器阶数(只能为奇数)
 //#define SAMPLE_RATE 1000  // 采样率
 #define QESP_NO_PORTABILITY_WARN
 
@@ -35,8 +35,7 @@ protected:
 
 private:
     QTime qtime;
-    int channels_num, cnt = 0;
-    int sp;
+    int sp, channels_num, filt_flag, cnt = 0;
     const double cofe = 0.022351744455307063;
     bool isFilt, isRec;
     BoardType board;

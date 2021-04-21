@@ -123,7 +123,7 @@ void P300Oddball::playImages(int imgNum)
     /*十字准星显示周期（默认）：800ms*/
     cross_duration.start();
     ui->label->setVisible(true);
-    ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/cross.jpg"));
+    ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/cross.png"));
     while(cross_duration.elapsed() < crossDurationTime)
     {
         QCoreApplication::processEvents();
