@@ -431,6 +431,8 @@
      <addaction name="action50uV"/>
      <addaction name="action100uV"/>
      <addaction name="action200uV"/>
+     <addaction name="action_500_500uV"/>
+     <addaction name="action_1000_1000uV"/>
     </widget>
     <widget class="QMenu" name="menu_4">
      <property name="title">
@@ -481,17 +483,17 @@
   </action>
   <action name="action50uV">
    <property name="text">
-    <string>-50~50uV</string>
+    <string>50</string>
    </property>
   </action>
   <action name="action100uV">
    <property name="text">
-    <string>-100~100uV</string>
+    <string>100</string>
    </property>
   </action>
   <action name="action200uV">
    <property name="text">
-    <string>-200~200uV</string>
+    <string>200</string>
    </property>
   </action>
   <action name="action8">
@@ -546,12 +548,52 @@
   </action>
   <action name="action_10_10uV">
    <property name="text">
-    <string>-10~10uV</string>
+    <string>10</string>
    </property>
   </action>
   <action name="action_25_25uV">
    <property name="text">
-    <string>-25~25uV</string>
+    <string>25</string>
+   </property>
+  </action>
+  <action name="action_500_500uV">
+   <property name="text">
+    <string>500</string>
+   </property>
+  </action>
+  <action name="action_1000_1000uV">
+   <property name="text">
+    <string>1000</string>
+   </property>
+  </action>
+  <action name="action5000">
+   <property name="text">
+    <string>5000</string>
+   </property>
+  </action>
+  <action name="action10000">
+   <property name="text">
+    <string>10000</string>
+   </property>
+  </action>
+  <action name="action50000">
+   <property name="text">
+    <string>50000</string>
+   </property>
+  </action>
+  <action name="action100000">
+   <property name="text">
+    <string>100000</string>
+   </property>
+  </action>
+  <action name="action200000">
+   <property name="text">
+    <string>200000</string>
+   </property>
+  </action>
+  <action name="action400000">
+   <property name="text">
+    <string>400000</string>
    </property>
   </action>
  </widget>

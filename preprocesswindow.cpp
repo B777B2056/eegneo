@@ -727,7 +727,7 @@ void PreprocessWindow::filt()
         if((lowPass > 0.0) && (highPass > 0.0))
         {
             int k;
-            Filter f;
+            MyFilter f;
             double y_n, coff[order];
             QQueue<double> buf[channelNum];
             f.countBandPassCoef(order, sampleFreq, coff, lowPass, highPass);  // 计算滤波器系数

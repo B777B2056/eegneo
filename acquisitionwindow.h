@@ -1,3 +1,4 @@
+
 #ifndef ACQUISITIONWINDOW_H
 #define ACQUISITIONWINDOW_H
 
@@ -50,6 +51,7 @@ signals:
     void sendBasicInfo(QString, QString);  // 向主界面发送基本信息(被试编号、缓存文件地址)
     void returnMain();  // 返回主界面
     void doRec(std::string);  // 开始记录
+    void writeEvent(std::string);  // 记录事件
     void doneRec();  // 停止记录
     void doFilt(int, int, int);  // 开始滤波
 
@@ -95,6 +97,10 @@ private slots:
 
     void setVoltage200();  // 设置各电导电压范围(-200~200uV)
 
+    void setVoltage500();
+
+    void setVoltage1000();
+
     void setTime1();  // 设置时间轴范围0-1s
 
     void setTime5();  // 设置时间轴范围0-5s
@@ -122,6 +128,7 @@ private slots:
     void on_pushButton_clicked();
 
 private:
+    unsigned int rcnt = 0;
     /*数据获取、存储与滤波子线程*/
     DataProcessThread *dpt;
 
@@ -164,7 +171,7 @@ private:
     std::vector<QChart *> charts;
     QList<QPointF> m_data;
     void initChart();  // 绘图初始化
-    void updateWave(const std::vector<double>& channelData);  //更新波形
+    void updateWave();  //更新波形
 
     /*与数据获取有关的私有成员*/
     std::vector<double> graphData;  // 用于绘图的数据
@@ -178,7 +185,6 @@ private:
     QTime startTime;  // EDF文件开始记录数据的时间
     int flag;  // 创建EDF文件时的标志位
     std::ofstream samplesWrite;  // 8通道缓存txt文件输出流
-    std::ofstream eventsWrite;  // 标记缓存txt文件输出流
     std::string tempFiles;
     std::vector<std::string> channelNames;  // 通道名称
     void setFilePath(int s, std::string& path);  // 设置文件保存的路径

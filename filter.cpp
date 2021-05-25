@@ -1,6 +1,6 @@
 #include "filter.h"
 
-void Filter::countBandPassCoef(int order, int sample_frequency, double *h, double low_cut, double high_cut)
+void MyFilter::countBandPassCoef(int order, int sample_frequency, double *h, double low_cut, double high_cut)
 {
     assert(order % 2);
     for (int i=0; i <= order / 2; i++)
@@ -15,7 +15,7 @@ void Filter::countBandPassCoef(int order, int sample_frequency, double *h, doubl
 /*《数字信号处理C语言程序集》P230带阻滤波器处有错误，带阻滤波器的计算公式应为
  * h[i] = (sin(pi * s) - sin(wc1 * s) - sin(wc2 * s)) / (pi * s)
  */
-void Filter::countNotchCoef(int order, int sample_frequency, double *h, double notch_cut)
+void MyFilter::countNotchCoef(int order, int sample_frequency, double *h, double notch_cut)
 {
     assert(order % 2);
     for (int i=0; i <= order / 2; i++)
@@ -26,3 +26,4 @@ void Filter::countNotchCoef(int order, int sample_frequency, double *h, double n
         h[order - i] = h[i];
     }
 }
+

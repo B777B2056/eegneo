@@ -5,7 +5,7 @@
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , lowCut(-1.0), highCut(-1.0), notchCut(-1.0)
-    , maxVoltage(50), timeInterval(5), threshold(150)
+    , maxVoltage(50), timeInterval(5), threshold(5000)
     , eventCount(0), curLine(0), isRec(false), isSaveP300BH(false), isFinish(-1), tempFiles("")
     , ui(new Ui::AcquisitionWindow)
 {
@@ -52,6 +52,8 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     connect(ui->action50uV, SIGNAL(triggered()), this, SLOT(setVoltage50()));
     connect(ui->action100uV, SIGNAL(triggered()), this, SLOT(setVoltage100()));
     connect(ui->action200uV, SIGNAL(triggered()), this, SLOT(setVoltage200()));
+    connect(ui->action_500_500uV, SIGNAL(triggered()), this, SLOT(setVoltage500()));
+    connect(ui->action_1000_1000uV, SIGNAL(triggered()), this, SLOT(setVoltage1000()));
     connect(ui->action0_1s, SIGNAL(triggered()), this, SLOT(setTime1()));
     connect(ui->action0_5s, SIGNAL(triggered()), this, SLOT(setTime5()));
     connect(ui->action0_10s, SIGNAL(triggered()), this, SLOT(setTime10()));
@@ -136,8 +138,7 @@ Retry1:
         if(rec == QDialog::Accepted){
             if(com.isEmpty()){
                 /*被试信息必须项缺失，弹出错误信息后返回*/
-                QMessageBox::StandardButton reply;
-                reply = QMessageBox::critical(siw, siw->tr("错误"),
+                QMessageBox::critical(siw, siw->tr("错误"),
                                                 "请填写com口！",
                                                 QMessageBox::Retry);
                 goto Retry2;
@@ -150,15 +151,16 @@ Retry1:
     connect(dpt, SIGNAL(inFilt()), this, SLOT(isInFilt()));
     connect(this, SIGNAL(doFilt(int, int, int)), dpt, SLOT(startFilt(int, int, int)));
     connect(this, SIGNAL(doRec(std::string)), dpt, SLOT(startRec(std::string)));
+    connect(this, SIGNAL(writeEvent(std::string)), dpt, SLOT(doEvent(std::string)));
     connect(this, SIGNAL(doneRec()), dpt, SLOT(stopRec()));
     dpt->start();
     /*初始化vector*/
+    impedance.assign(channel_num, 0);
+    graphData.assign(channel_num, 0.0);
+    channelNames.assign(channel_num, "");
+    pointQueue.assign(channel_num, QQueue<QPointF>());
     for(int i = 0; i < channel_num; i++)
     {
-        impedance.push_back(0);
-        graphData.push_back(0.0);
-        channelNames.push_back("");
-        pointQueue.push_back(QQueue<QPointF>());
         impDisplay.push_back(new QLabel(this));
         series.push_back(new QSplineSeries);
         axisX.push_back(new QDateTimeAxis);
@@ -185,12 +187,8 @@ void AcquisitionWindow::createTempTXT()
     if (!dir.exists(QString::fromStdString("temp files")))
         dir.mkpath("temp files");
     tempFiles = "temp files//" + tempFiles;
-    eventsWrite.open(tempFiles + "_events.txt");
-    eventsWrite.close();
-    eventsWrite.open(tempFiles + "_events.txt", std::ios::app);
-    eventsWrite << "latency type" << std::endl;
     isRec = true;
-    emit doRec(tempFiles + "_samples.txt");
+    emit doRec(tempFiles);
 }
 
 /*设置文件保存的路径*/
@@ -615,11 +613,8 @@ void AcquisitionWindow::createMark(const std::string event)
     /*将marker写入文件*/
     if(isRec)
     {
+        emit writeEvent(event);
         eventCount++;
-        double secs = 10000 * curLine / sp;
-        long long run_time = secs;
-        /*写入缓存txt文件*/
-        eventsWrite << run_time << " " + event << std::endl;
     }
 }
 
@@ -679,71 +674,89 @@ void AcquisitionWindow::initChart()
 /*设置Y轴范围*/
 void AcquisitionWindow::setVoltage10()
 {
+    maxVoltage = 10;
     for(int index = 0; index < channel_num; index++)
     {
-        charts[index]->axisY()->setRange(-10, 10);
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
     }
-    maxVoltage = 10;
 }
 
 void AcquisitionWindow::setVoltage25()
 {
+    maxVoltage = 25;
     for(int index = 0; index < channel_num; index++)
     {
-        charts[index]->axisY()->setRange(-25, 25);
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
     }
-    maxVoltage = 25;
 }
 
 
 void AcquisitionWindow::setVoltage50()
 {
+    maxVoltage = 50;
     for(int index = 0; index < channel_num; index++)
     {
-        charts[index]->axisY()->setRange(-50, 50);
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
     }
-    maxVoltage = 50;
 }
 
 void AcquisitionWindow::setVoltage100()
 {
+    maxVoltage = 100;
     for(int index = 0; index < channel_num; index++)
     {
-        charts[index]->axisY()->setRange(-100, 100);
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
     }
-    maxVoltage = 100;
 }
 
 void AcquisitionWindow::setVoltage200()
 {
+    maxVoltage = 200;
     for(int index = 0; index < channel_num; index++)
     {
-        charts[index]->axisY()->setRange(-200, 200);
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
     }
-    maxVoltage = 200;
+}
+
+void AcquisitionWindow::setVoltage500()
+{
+    maxVoltage = 500;
+    for(int index = 0; index < channel_num; index++)
+    {
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
+    }
+}
+
+void AcquisitionWindow::setVoltage1000()
+{
+    maxVoltage = 1000;
+    for(int index = 0; index < channel_num; index++)
+    {
+        charts[index]->axisY()->setRange(-maxVoltage, maxVoltage);
+    }
 }
 
 /*设置X轴范围*/
 void AcquisitionWindow::setTime1()
 {
     timeInterval = 1;
-    threshold = 100 * timeInterval;
+    threshold = 1000 * timeInterval;
 }
 
 void AcquisitionWindow::setTime5()
 {
     timeInterval = 5;
-    threshold = 100 * timeInterval;
+    threshold = 1000 * timeInterval;
 }
 
 void AcquisitionWindow::setTime10()
 {
     timeInterval = 10;
-    threshold = 100 * timeInterval;
+    threshold = 1000 * timeInterval;
 }
 
 /*波形更新*/
-void AcquisitionWindow::updateWave(const std::vector<double>& channelData)
+void AcquisitionWindow::updateWave()
 {
     /*绘制波形*/
     for(int index = 0; index < channel_num; index++)
@@ -754,7 +767,7 @@ void AcquisitionWindow::updateWave(const std::vector<double>& channelData)
         {
             pointQueue[index].dequeue();
         }
-        pointQueue[index].enqueue(QPointF(QDateTime::currentDateTime().toMSecsSinceEpoch(), channelData[index]));
+        pointQueue[index].enqueue(QPointF(QDateTime::currentDateTime().toMSecsSinceEpoch(), graphData[index]));
         series[index]->replace(pointQueue[index]);
     }
 }
@@ -774,8 +787,8 @@ void AcquisitionWindow::getImpedanceFromBoard()
 /*数据获取*/
 void AcquisitionWindow::receiveData(std::vector<double> vec)
 {
-    for(int i = 0; i < channel_num; i++)
-        graphData[i] = vec[i];
+    graphData = vec;
+    ++rcnt;
     if(isRec) curLine++;
 }
 
@@ -783,7 +796,7 @@ void AcquisitionWindow::receiveData(std::vector<double> vec)
 void AcquisitionWindow::graphFresh()
 {
     /*波形刷新*/
-    updateWave(graphData);
+    updateWave();
     /*绘制marker*/
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
     for(iter = marks.begin(); iter != marks.end(); iter++)
@@ -829,8 +842,6 @@ void AcquisitionWindow::graphFresh()
 void AcquisitionWindow::stopRec()
 {
   emit doneRec();
-  //关闭txt文件输入流
-  eventsWrite.close();
 }
 
 /*p300 Oddball范式*/

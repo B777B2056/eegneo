@@ -1,18 +1,16 @@
 #include "workthread.h"
 
 DataProcessThread::DataProcessThread(int channels_num, int sampleRate, BoardType b, QString c)
-    : sp(sampleRate), isFilt(false), isRec(false), board(b), com(c)
+    : sp(sampleRate), cnt(1), cofe(0.022351744455307063), isFilt(false), isRec(false), board(b), com(c)
 {
     this->channels_num = channels_num;
-    for(int i = 0; i < this->channels_num; i++)
-    {
-        data.push_back(0.0);
-        filtData.push_back(0.0);
-        bandPassBuffer.push_back(QQueue<double>());
-        notchBuffer.push_back(QQueue<double>());
-        bandPassCoff.push_back(new double[channels_num]);
-        notchCoff.push_back(new double[channels_num]);
-    }
+    sum.assign(channels_num, 0.0);
+    data.assign(channels_num, 0.0);
+    averData.assign(channels_num, 0.0);
+    filtData.assign(channels_num, 0.0);
+    bandPassBuffer.assign(channels_num, QQueue<double>());
+    notchBuffer.assign(channels_num, QQueue<double>());
+    averBuffer.assign(channels_num, QQueue<QPointF>());
     qRegisterMetaType<std::vector<double> >("std::vector<double>");
     boardInit();
 }
@@ -21,19 +19,12 @@ DataProcessThread::~DataProcessThread()
 {
 //    process->kill();
 //    delete process;
-    for(std::size_t i = 0; i < bandPassCoff.size(); i++)
-    {
-        delete []bandPassCoff[i];
-        delete []notchCoff[i];
-    }
+    delete []bandPassCoff;
+    delete []notchCoff;
 }
 
 void DataProcessThread::run()
 {
-    d = new QTimer();
-    d->setInterval(50);
-    connect(d, SIGNAL(timeout()), this, SLOT(processData()));
-    d->start();
     //启动子线程消息循环
     this->exec();
 }
@@ -49,8 +40,6 @@ void DataProcessThread::boardInit()
         client->abort();
         client->bind(QHostAddress(getLocalIP()), 4000);
         connect(client, SIGNAL(readyRead()), this, SLOT(getDataFromShanxi()));
-        std::cout << "UDP client open" << std::endl;
-        qtime.start();
         std::cout << "Ready for reading data" << std::endl;
     }
     else
@@ -181,35 +170,40 @@ void DataProcessThread::getDataFromShanxi()
 {
     while(client->hasPendingDatagrams())
     {
-        char bytes[40];
-        int size = client->readDatagram(bytes, 40);
+        char bytes[72];
+        int size = client->readDatagram(bytes, 72);
         for(int i = 0; i < size; i++)
         {
             if((i < size - 1)
                     && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
             {
-                if((i < size - 39)
-                        && (bytes[i + 34] == (char)0x00) && (bytes[i + 35] == (char)0x00)
-                        && (bytes[i + 36] == (char)0x00) && (bytes[i + 37] == (char)0x00)
-                        && (bytes[i + 38] == (char)0x00) && (bytes[i + 39] == (char)0x00))
+                if((i < size - 71)
+                        && (bytes[i + 66] == (char)0x00) && (bytes[i + 67] == (char)0x00)
+                        && (bytes[i + 68] == (char)0x00) && (bytes[i + 69] == (char)0x00)
+                        && (bytes[i + 70] == (char)0x00) && (bytes[i + 71] == (char)0x00))
                 {
                     int curChannel = 0;
-                    for(int offset = 2; offset < 34; offset += 4)
+                    for(int offset = 2; offset < 66; offset += 8)
                     {
-                        data[curChannel] = _turnBytes2uV(bytes[i + offset], bytes[i + offset + 1],
-                                bytes[i + offset + 2], bytes[i + offset + 3]);
+                        unsigned char chs[8] = {(unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
+                                                (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
+                                                (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
+                                                (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]};
+                        data[curChannel] = _turnBytes2uV(chs);
                         if(isRec)
                         {
                             /*写入缓存txt文件*/
                             if(curChannel < this->channels_num - 1)
                                 samplesWrite << data[curChannel] << " ";
                             else
+                            {
                                 samplesWrite << data[curChannel] << std::endl;
+                                ++cnt;
+                            }
                         }
                         ++curChannel;
                     }
-                    ++cnt;
-                    std::cout << "MATCH " << qtime.elapsed() / 1000.0 << " " << cnt << std::endl;
+                    processData();
                     i += 39;
                 }
             }
@@ -225,7 +219,6 @@ void DataProcessThread::getDataFromShanghai()
     char ch = 0, single_num[3];
     while(port->read(&ch,1))
     {
-        if(isRec)   std::cout << std::hex << (unsigned int)(unsigned char)ch << " ";
         if(state_machine == 0)
         {
             if(ch == (char)0xc0)
@@ -248,8 +241,6 @@ void DataProcessThread::getDataFromShanghai()
         {
             if(cur_channel == 8)
             {
-//                ++cnt;
-//                std::cout << "MATCH, " << "Real receive = " << cnt << std::endl;
                 cur_channel = 0;
                 if(isRec)
                 {
@@ -261,7 +252,9 @@ void DataProcessThread::getDataFromShanghai()
                         else
                             samplesWrite << data[si] << std::endl;
                     }
+                    ++cnt;
                 }
+                processData();
             }
             if(!((state_machine - 3) % 3) && (state_machine > 3))
                 data[cur_channel++] = _turnBytes2uV(single_num[0], single_num[1], single_num[2]);
@@ -286,21 +279,28 @@ double DataProcessThread::_turnBytes2uV(char byte1, char byte2, char byte3)
     return (double)target * cofe;
 }
 
-double DataProcessThread::_turnBytes2uV(unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4)
+double DataProcessThread::_turnBytes2uV(unsigned char *bytes)
 {
     int i, exponent;
-    unsigned int sign, mantissa;
-    float curNum = 0.0;
+    unsigned int sign;
+    unsigned long long mantissa;
+    double curNum = 0.0;
     std::string str = "";
-    sign = (byte4 & 0x80) >> 7;
-    exponent = (((byte4 & 0x7f) << 1) + ((byte3 & 0x80) >> 7)) - 127;
-    mantissa = ((byte3 & 0x7f) << 16) + (byte2 << 8) + byte1;
+    sign = (bytes[7] & 0x80) >> 7;
+    exponent = (static_cast<unsigned int>(bytes[7] & 0x7f) << 4) + (static_cast<unsigned int>(bytes[6] & 0xf0) >> 4) - 1023;
+    mantissa = (static_cast<unsigned long long>(bytes[6] & 0x0f) << 48)
+             + (static_cast<unsigned long long>(bytes[5]) << 40)
+             + (static_cast<unsigned long long>(bytes[4]) << 32)
+             + (static_cast<unsigned long long>(bytes[3]) << 24)
+             + (static_cast<unsigned long long>(bytes[2]) << 16)
+             + (static_cast<unsigned long long>(bytes[1]) << 8)
+             +  static_cast<unsigned long long>(bytes[0]);
     while(mantissa)
     {
         str += ('0' + mantissa % 2);
         mantissa /= 2;
     }
-    while(str.length() < 23)
+    while(str.length() < 52)
         str += '0';
     str += '1';
     if(exponent >= 0)
@@ -326,15 +326,30 @@ double DataProcessThread::_turnBytes2uV(unsigned char byte1, unsigned char byte2
 
 void DataProcessThread::processData()
 {
+    for(int i = 0; i < channels_num; ++i)
+    {
+        if(averBuffer[i].size() >= 100)
+        {
+            double aver = sum[i] / 100.0, tmp = averBuffer[i].front().y();
+            averBuffer[i].dequeue();
+            sum[i] -= tmp;
+            sum[i] += data[i];
+            averBuffer[i].enqueue(QPointF(cnt, data[i]));
+            averData[i] = data[i] - aver;
+        }else{
+            sum[i] += data[i];
+            averBuffer[i].enqueue(QPointF(cnt, data[i]));
+        }
+    }
     if(isFilt)
     {
-        for(std::size_t i = 0; i < data.size(); i++)
+        for(std::size_t i = 0; i < averData.size(); i++)
         {
-            Filter f;
+            MyFilter f;
             /*原始数据进入带通滤波缓冲区*/
             if(bandPassBuffer[i].size() < FILTER_ORDER + 1)
             {
-                bandPassBuffer[i].enqueue(data[i]);
+                bandPassBuffer[i].enqueue(averData[i]);
             }
             /*带通滤波*/
             else
@@ -344,34 +359,40 @@ void DataProcessThread::processData()
                 /*队列左移一位*/
                 bandPassBuffer[i].dequeue();
                 /*原始值入队*/
-                bandPassBuffer[i].enqueue(data[i]);
+                bandPassBuffer[i].enqueue(averData[i]);
+                filtData[i] = bp_y_n;
                 /*带通滤波后的值入队*/
-                if(notchBuffer[i].size() < FILTER_ORDER + 1)
-                {
-                    notchBuffer[i].enqueue(bp_y_n);
-                    data[i] = bp_y_n;
-                }
-                else
-                {
-                    double y_n = conv(Notch, i);
-                    notchBuffer[i].dequeue();
-                    notchBuffer[i].enqueue(bp_y_n);
-                    data[i] = y_n;
-                }
+//                if(notchBuffer[i].size() < FILTER_ORDER + 1)
+//                {
+//                    notchBuffer[i].enqueue(bp_y_n);
+//                    filtData[i] = bp_y_n;
+//                }
+//                else
+//                {
+//                    double y_n = conv(Notch, i);
+//                    notchBuffer[i].dequeue();
+//                    notchBuffer[i].enqueue(bp_y_n);
+//                    filtData[i] = y_n;
+//                }
                 if(!filt_flag)
                     emit inFilt();
                 filt_flag = 1;
             }
         }
+        emit sendData(filtData);
+        std::cout << averData[0] << " " << filtData[0] << std::endl;
     }
-    emit sendData(data);
+    else
+    {
+        emit sendData(averData);
+    }
 }
 
 void DataProcessThread::startRec(std::string tempFile)
 {
-    samplesWrite.open(tempFile);
+    samplesWrite.open(tempFile + "_samples.txt");
     samplesWrite.close();
-    samplesWrite.open(tempFile, std::ios::app);
+    samplesWrite.open(tempFile + "_samples.txt", std::ios::app);
     for(int i = 0; i < channels_num; i++)
     {
         if(i < channels_num - 1)
@@ -379,30 +400,41 @@ void DataProcessThread::startRec(std::string tempFile)
         else
             samplesWrite << i + 1 << std::endl;
     }
+    eventsWrite.open(tempFile + "_events.txt");
+    eventsWrite.close();
+    eventsWrite.open(tempFile + "_events.txt", std::ios::app);
+    eventsWrite << "latency type" << std::endl;
     isRec = true;
+}
+
+void DataProcessThread::doEvent(std::string event)
+{
+    double secs = static_cast<double>(cnt) / sp;
+    unsigned long long run_time = 10000 * secs;
+    /*写入缓存txt文件*/
+    eventsWrite << run_time << " " + event << std::endl;
 }
 
 void DataProcessThread::stopRec()
 {
     isRec = false;
     samplesWrite.close();
+    eventsWrite.close();
 }
 
 void DataProcessThread::startFilt(int lowCut, int highCut, int notchCut)
 {
     filt_flag = 0;
     isFilt = true;
-    Filter f;
+    MyFilter f;
     for(std::size_t i = 0; i < data.size(); i++)
     {
         /*计算带通滤波器冲激响应*/
-        double *cur_bp_h = new double[FILTER_ORDER + 1];
-        f.countBandPassCoef(FILTER_ORDER, sp, cur_bp_h, lowCut, highCut);
-        bandPassCoff[i] = cur_bp_h;
+        bandPassCoff = new double[FILTER_ORDER + 1];
+        f.countBandPassCoef(FILTER_ORDER, sp, bandPassCoff, lowCut, highCut);
         /*计算陷波器冲激响应*/
-        double *cur_n_h = new double[FILTER_ORDER + 1];
-        f.countNotchCoef(FILTER_ORDER, sp, cur_n_h, notchCut);
-        notchCoff[i] = cur_n_h;
+        notchCoff = new double[FILTER_ORDER + 1];
+        f.countNotchCoef(FILTER_ORDER, sp, notchCoff, notchCut);
     }
 }
 
@@ -414,14 +446,14 @@ double DataProcessThread::conv(FilterType type, int index)
     {
         for(int k = 0; k <= FILTER_ORDER; k++)
         {
-            y_n += bandPassCoff[index][k] * bandPassBuffer[index][FILTER_ORDER - k];
+            y_n += bandPassCoff[k] * bandPassBuffer[index][FILTER_ORDER - k];
         }
     }
     else
     {
         for(int k = 0; k <= FILTER_ORDER; k++)
         {
-            y_n += notchCoff[index][k] * notchBuffer[index][FILTER_ORDER - k];
+            y_n += notchCoff[k] * notchBuffer[index][FILTER_ORDER - k];
         }
     }
     return y_n;
