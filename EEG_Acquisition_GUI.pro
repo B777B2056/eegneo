@@ -8,7 +8,8 @@ CONFIG += c++14
 # depend on your compiler). Please consult the documentation of the
 # deprecated API in order to know how to port your code away from it.
 DEFINES += QT_DEPRECATED_WARNINGS
-include(C:/Users/19373/qextserialport/src/qextserialport.pri)
+DEFINES += _USE_MATH_DEFINES
+include($$PWD/third/qextserialport/src/qextserialport.pri)
 # You can also make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
@@ -87,9 +88,12 @@ TRANSLATIONS += \
 DISTFILES += \
     dataformatload.py \
 
-win32:CONFIG(release, debug|release): LIBS += -L$$PWD/../../../anaconda3/libs/ -lpython38
-else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/../../../anaconda3/libs/ -lpython38
-else:unix: LIBS += -L$$PWD/../../../anaconda3/libs/ -lpython38
+unix|win32: LIBS += -L$$PWD/third/pylib/ -lpython38
 
-INCLUDEPATH += $$PWD/../../../anaconda3/include
-DEPENDPATH += $$PWD/../../../anaconda3/include
+INCLUDEPATH += $$PWD/third/pylib/include
+DEPENDPATH += $$PWD/third/pylib/include
+
+unix|win32: LIBS += -L$$PWD/third/pylib/ -lpython3
+
+INCLUDEPATH += $$PWD/third/pylib/include
+DEPENDPATH += $$PWD/third/pylib/include
