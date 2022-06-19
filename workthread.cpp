@@ -1,4 +1,8 @@
-#include "workthread.h"
+﻿#include "workthread.h"
+#include <cstdlib>
+#include <QDebug>
+
+std::vector<std::deque<double> > _dataBuf;
 
 DataProcessThread::DataProcessThread(int channels_num, int sampleRate, BoardType b, QString c)
     : sp(sampleRate), cnt(1), cofe(0.022351744455307063), isFilt(false), isRec(false), board(b), com(c)
@@ -17,8 +21,6 @@ DataProcessThread::DataProcessThread(int channels_num, int sampleRate, BoardType
 
 DataProcessThread::~DataProcessThread()
 {
-//    process->kill();
-//    delete process;
     delete []bandPassCoff;
     delete []notchCoff;
 }
@@ -26,24 +28,22 @@ DataProcessThread::~DataProcessThread()
 void DataProcessThread::run()
 {
     //启动子线程消息循环
-    this->exec();
+    exec();
 }
 
 void DataProcessThread::boardInit()
 {
     if(board == Shanxi)
     {
-//        process->start("/dist/shanxi.exe");
-//        process->waitForStarted();  // 等待程序确实启动
-//        this->sleep(5);  // 等待服务器开启
+        // 用UDP进行IPC
         client = new QUdpSocket(this);
         client->abort();
-        client->bind(QHostAddress(getLocalIP()), 4000);
+        client->bind(QHostAddress("127.0.0.1"), 4000);
         connect(client, SIGNAL(readyRead()), this, SLOT(getDataFromShanxi()));
-        std::cout << "Ready for reading data" << std::endl;
     }
     else
     {
+        // 直接读串口
         struct PortSettings my_setting
         {
             BAUD256000,   // 波特率
@@ -57,42 +57,20 @@ void DataProcessThread::boardInit()
         port->open(QIODevice::ReadWrite);
         connect(port, SIGNAL(readyRead()), this, SLOT(getDataFromShanghai()));
         QByteArray commands[3];
-        commands[0].resize(2);
-        commands[0][0] = 0x73;
-        commands[0][1] = 0x76;
+        commands[0].resize(2); commands[0][0] = 0x73; commands[0][1] = 0x76;
         port->write(commands[0]);
-        commands[1].resize(5);
-        commands[1][0] = 0x2f;
-        commands[1][1] = 0x30;
-        commands[1][2] = 0x7e;
-        commands[1][3] = 0x36;
-        commands[1][4] = 0x78;
+        commands[1].resize(5); commands[1][0] = 0x2f; commands[1][1] = 0x30;
+        commands[1][2] = 0x7e; commands[1][3] = 0x36; commands[1][4] = 0x78;
         port->write(commands[1]);
         commands[2].resize(71);
-        commands[2][0] = 0x31;
-        commands[2][1] = 0x30;
-        commands[2][2] = 0x36;
-        commands[2][3] = 0x30;
-        commands[2][4] = 0x31;
-        commands[2][5] = 0x31;
-        commands[2][6] = 0x30;
-        commands[2][7] = 0x58;
-        commands[2][8] = 0x78;
-        commands[2][9] = 0x32;
-        commands[2][10] = 0x30;
-        commands[2][11] = 0x36;
-        commands[2][12] = 0x30;
-        commands[2][13] = 0x31;
-        commands[2][14] = 0x31;
-        commands[2][15] = 0x30;
-        commands[2][16] = 0x58;
-        commands[2][17] = 0x78;
-        commands[2][18] = 0x33;
-        commands[2][19] = 0x30;
-        commands[2][20] = 0x36;
-        commands[2][21] = 0x30;
-        commands[2][22] = 0x31;
-        commands[2][23] = 0x31;
+        commands[2][0] = 0x31; commands[2][1] = 0x30; commands[2][2] = 0x36;
+        commands[2][3] = 0x30; commands[2][4] = 0x31; commands[2][5] = 0x31;
+        commands[2][6] = 0x30; commands[2][7] = 0x58; commands[2][8] = 0x78;
+        commands[2][9] = 0x32; commands[2][10] = 0x30; commands[2][11] = 0x36;
+        commands[2][12] = 0x30; commands[2][13] = 0x31; commands[2][14] = 0x31;
+        commands[2][15] = 0x30; commands[2][16] = 0x58; commands[2][17] = 0x78;
+        commands[2][18] = 0x33; commands[2][19] = 0x30; commands[2][20] = 0x36;
+        commands[2][21] = 0x30; commands[2][22] = 0x31; commands[2][23] = 0x31;
         commands[2][24] = 0x30;
         commands[2][25] = 0x58;
         commands[2][26] = 0x78;
@@ -146,24 +124,6 @@ void DataProcessThread::boardInit()
     }
 }
 
-QString DataProcessThread::getLocalIP()
-{
-    QString hostName = QHostInfo::localHostName();//本地主机名
-    QHostInfo hostInfo = QHostInfo::fromName(hostName);
-    QString  localIP = "";
-    QList<QHostAddress> addList = hostInfo.addresses();
-    for (int i = 0;i < addList.count(); i++)
-    {
-        QHostAddress aHost = addList.at(i);
-        if (QAbstractSocket::IPv4Protocol == aHost.protocol())
-        {
-            localIP = aHost.toString();
-            break;
-        }
-    }
-    return localIP;
-}
-
 // 帧头：C0 A0
 // 帧尾：6个0
 void DataProcessThread::getDataFromShanxi()
@@ -185,10 +145,13 @@ void DataProcessThread::getDataFromShanxi()
                     int curChannel = 0;
                     for(int offset = 2; offset < 66; offset += 8)
                     {
-                        unsigned char chs[8] = {(unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
+                        unsigned char chs[8] = {
+                                                (unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
                                                 (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
                                                 (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
-                                                (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]};
+                                                (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]
+                                               };
+                        _mutex.lock();
                         data[curChannel] = _turnBytes2uV(chs);
                         if(isRec)
                         {
@@ -201,6 +164,7 @@ void DataProcessThread::getDataFromShanxi()
                                 ++cnt;
                             }
                         }
+                         _mutex.unlock();
                         ++curChannel;
                     }
                     processData();
@@ -217,6 +181,7 @@ void DataProcessThread::getDataFromShanghai()
 {
     int cur_channel = 0, state_machine = 0;
     char ch = 0, single_num[3];
+    // 有限状态机
     while(port->read(&ch,1))
     {
         if(state_machine == 0)
@@ -244,6 +209,7 @@ void DataProcessThread::getDataFromShanghai()
                 cur_channel = 0;
                 if(isRec)
                 {
+                    _mutex.lock();
                     for(int si = 0; si < channels_num; si++)
                     {
                         /*写入缓存txt文件*/
@@ -252,12 +218,17 @@ void DataProcessThread::getDataFromShanghai()
                         else
                             samplesWrite << data[si] << std::endl;
                     }
+                    _mutex.unlock();
                     ++cnt;
                 }
                 processData();
             }
             if(!((state_machine - 3) % 3) && (state_machine > 3))
+            {
+                _mutex.lock();
                 data[cur_channel++] = _turnBytes2uV(single_num[0], single_num[1], single_num[2]);
+                _mutex.unlock();
+            }
             single_num[(state_machine - 3) % 3] = ch;
             state_machine++;
         }
@@ -294,7 +265,7 @@ double DataProcessThread::_turnBytes2uV(unsigned char *bytes)
              + (static_cast<unsigned long long>(bytes[3]) << 24)
              + (static_cast<unsigned long long>(bytes[2]) << 16)
              + (static_cast<unsigned long long>(bytes[1]) << 8)
-             +  static_cast<unsigned long long>(bytes[0]);
+             + (static_cast<unsigned long long>(bytes[0]));
     while(mantissa)
     {
         str += ('0' + mantissa % 2);
@@ -326,6 +297,7 @@ double DataProcessThread::_turnBytes2uV(unsigned char *bytes)
 
 void DataProcessThread::processData()
 {
+    // 原始数据塞进缓存区
     for(int i = 0; i < channels_num; ++i)
     {
         if(averBuffer[i].size() >= 100)
@@ -343,25 +315,24 @@ void DataProcessThread::processData()
     }
     if(isFilt)
     {
+        // 滤波
         for(std::size_t i = 0; i < averData.size(); i++)
         {
-            MyFilter f;
-            /*原始数据进入带通滤波缓冲区*/
+            // 原始数据进入带通滤波缓冲区
             if(bandPassBuffer[i].size() < FILTER_ORDER + 1)
             {
                 bandPassBuffer[i].enqueue(averData[i]);
             }
-            /*带通滤波*/
+            // 带通滤波
             else
             {
-                /*计算滤波后的值*/
-                double bp_y_n = conv(BandPass, i);
-                /*队列左移一位*/
+                // 计算滤波后的值
+                filtData[i] = conv(BandPass, i);
+                // 队列左移一位
                 bandPassBuffer[i].dequeue();
-                /*原始值入队*/
+                // 原始值入队
                 bandPassBuffer[i].enqueue(averData[i]);
-                filtData[i] = bp_y_n;
-                /*带通滤波后的值入队*/
+                // 带通滤波后的值入队
 //                if(notchBuffer[i].size() < FILTER_ORDER + 1)
 //                {
 //                    notchBuffer[i].enqueue(bp_y_n);
@@ -379,11 +350,12 @@ void DataProcessThread::processData()
                 filt_flag = 1;
             }
         }
+        // 发送滤波后的数据
         emit sendData(filtData);
-        std::cout << averData[0] << " " << filtData[0] << std::endl;
     }
     else
     {
+        // 不滤波，直接发送原始数据
         emit sendData(averData);
     }
 }
@@ -411,7 +383,7 @@ void DataProcessThread::doEvent(std::string event)
 {
     double secs = static_cast<double>(cnt) / sp;
     unsigned long long run_time = 10000 * secs;
-    /*写入缓存txt文件*/
+    // 写入缓存txt文件
     eventsWrite << run_time << " " + event << std::endl;
 }
 
@@ -426,35 +398,28 @@ void DataProcessThread::startFilt(int lowCut, int highCut, int notchCut)
 {
     filt_flag = 0;
     isFilt = true;
-    MyFilter f;
     for(std::size_t i = 0; i < data.size(); i++)
     {
-        /*计算带通滤波器冲激响应*/
+        // 计算带通滤波器冲激响应
         bandPassCoff = new double[FILTER_ORDER + 1];
-        f.countBandPassCoef(FILTER_ORDER, sp, bandPassCoff, lowCut, highCut);
-        /*计算陷波器冲激响应*/
+        Filter::countBandPassCoef(FILTER_ORDER, sp, bandPassCoff, lowCut, highCut);
+        // 计算陷波器冲激响应
         notchCoff = new double[FILTER_ORDER + 1];
-        f.countNotchCoef(FILTER_ORDER, sp, notchCoff, notchCut);
+        Filter::countNotchCoef(FILTER_ORDER, sp, notchCoff, notchCut);
     }
 }
 
-/*时域序列卷积*/
-double DataProcessThread::conv(FilterType type, int index)
+// 时域序列卷积
+double DataProcessThread::conv(FilterType type, std::size_t index)
 {
-    double y_n = 0.0;
-    if(type == BandPass)
+    auto conv_impl = [](const double* coff, const QQueue<double>& data)->double
     {
+        double y_n = 0.0;
         for(int k = 0; k <= FILTER_ORDER; k++)
         {
-            y_n += bandPassCoff[k] * bandPassBuffer[index][FILTER_ORDER - k];
+            y_n += coff[k] * data[FILTER_ORDER - k];
         }
-    }
-    else
-    {
-        for(int k = 0; k <= FILTER_ORDER; k++)
-        {
-            y_n += notchCoff[k] * notchBuffer[index][FILTER_ORDER - k];
-        }
-    }
-    return y_n;
+        return y_n;
+    };
+    return (type == BandPass) ? conv_impl(bandPassCoff, bandPassBuffer[index]) : conv_impl(notchCoff, notchBuffer[index]);
 }

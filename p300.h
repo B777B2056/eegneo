@@ -1,4 +1,4 @@
-#ifndef P300_H
+﻿#ifndef P300_H
 #define P300_H
 
 #include <QWidget>
@@ -12,7 +12,7 @@ namespace Ui {
 class p300;
 }
 
-/*P300 Oddball范式*/
+// P300 Oddball范式
 class P300Oddball : public QWidget
 {
     Q_OBJECT

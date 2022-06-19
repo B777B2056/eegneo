@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Background</class>
- <widget class="QWidget" name="Background">
+ <class>BackgroundWindow</class>
+ <widget class="QWidget" name="BackgroundWindow">
   <property name="geometry">
    <rect>
     <x>0</x>

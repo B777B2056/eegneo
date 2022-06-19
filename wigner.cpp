@@ -1,6 +1,10 @@
-#include "wigner.h"
+﻿#include "wigner.h"
 #include "ui_wigner.h"
-#include <iostream>
+
+
+#if _MSC_VER >= 1600
+#pragma execution_character_set("utf-8")
+#endif
 
 Wigner::Wigner(int c, double s, QWidget *parent) :
     QWidget(parent),
@@ -122,10 +126,10 @@ void Wigner::analytic(double *x, double *y, int len)
     fft(x, y, len, -1);
 }
 
-/*m必须小于起始时间且必须是2的整数次幂*/
+// m必须小于起始时间且必须是2的整数次幂
 void Wigner::calc(std::vector<double>& x)
 {
-    int i, j, len = findMin2(x.size());
+    int i, j, len = findMin2(static_cast<int>(x.size()));
     double am, freqy, min_freqy = 65536.0, max_freqy = 0.0, min_am = 65536.0, max_am = 0.0, *xc, *y, *sr, *si;
     sr = new double[m];
     si = new double[m];

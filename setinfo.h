@@ -1,4 +1,4 @@
-#ifndef SET_INFO_H
+﻿#ifndef SET_INFO_H
 #define SET_INFO_H
 
 #include <QDialog>

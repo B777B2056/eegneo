@@ -1,5 +1,9 @@
-#include "psd.h"
+﻿#include "psd.h"
 #include "ui_psd.h"
+
+#if _MSC_VER >= 1600
+#pragma execution_character_set("utf-8")
+#endif
 
 PSD::PSD(int c, double s, QWidget *parent) :
     QWidget(parent),
@@ -37,7 +41,7 @@ void PSD::plot(double **x, int len)
 {
     if((startFreq < 0) || (stopFreq < 0) || (startFreq >= stopFreq) || (type == EMPTY))
     {
-        QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+        QMessageBox::critical(this, this->tr("错误"), "参数填写错误");
         return;
     }
     // 图像初始化
@@ -65,16 +69,16 @@ void PSD::initChart()
     series = new QSplineSeries*[channelNum];
     for(int i = 0; i < channelNum; i++)
         series[i] = new QSplineSeries;
-    //设置x轴
+    // 设置x轴
     axisX->setRange(startFreq, stopFreq);
     axisX->setTickCount(5);
     axisX->setTitleText("频率/Hz");
     chart->addAxis(axisX, Qt::AlignBottom);
-    //设置y轴
+    // 设置y轴
     axisY->setRange(-100, 40);
     axisY->setTitleText(this->type == Log ? "幅值/dB" : "幅值uV^2/Hz");
     chart->addAxis(axisY, Qt::AlignLeft);
-    //链接数据
+    // 链接数据
     for(int i = 0; i < channelNum; i++)
     {
         series[i]->setUseOpenGL(true);
@@ -86,14 +90,14 @@ void PSD::initChart()
         chart->setAxisX(axisX, series[i]);
         chart->setAxisY(axisY, series[i]);
     }
-    //设置界面显示
+    // 设置界面显示
     chart->legend()->hide();
     chart->setTheme(QChart::ChartThemeLight);
     chart->axisX()->setGridLineVisible(false);
     chart->axisY()->setGridLineVisible(false);
-    chart->layout()->setContentsMargins(0, 0, 0, 0);//设置外边界
-    chart->setMargins(QMargins(0, 0, 0, 0));//设置内边界
-    chart->setBackgroundRoundness(0);//设置背景区域无圆角
+    chart->layout()->setContentsMargins(0, 0, 0, 0); // 设置外边界
+    chart->setMargins(QMargins(0, 0, 0, 0)); //设置内边界
+    chart->setBackgroundRoundness(0); // 设置背景区域无圆角
     ui->widget->setChart(chart);
 }
 

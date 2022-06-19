@@ -1,5 +1,9 @@
-#include "p300.h"
+﻿#include "p300.h"
 #include "ui_p300.h"
+
+#if _MSC_VER >= 1600
+#pragma execution_character_set("utf-8")
+#endif
 
 P300Oddball::P300Oddball(QWidget *parent)
     : QWidget(parent)
@@ -10,7 +14,7 @@ P300Oddball::P300Oddball(QWidget *parent)
     QPalette palette(this->palette());
     palette.setColor(QPalette::Background, Qt::black);
     setPalette(palette);
-    //显示实验参数设置对话框
+    // 显示实验参数设置对话框
     QMessageBox::StandardButton reply;
     reply = QMessageBox::question(this, tr("实验参数设置"),
                                     "默认参数（单Trial）如下\n"
@@ -65,13 +69,13 @@ P300Oddball::P300Oddball(QWidget *parent)
         blankDurationTimeDown = 1000;
         blankDurationTimeUp = 1200;
     }
-    //发送图片总数量至采集界面
+    // 发送图片总数量至采集界面
     emit sendImgNum(num_img);
-    //显示准备界面
+    // 显示准备界面
     ui->label->setAlignment(Qt::AlignCenter);
     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/gotask.jpg"));
     ui->label->show();
-    //全屏显示
+    // 全屏显示
 //    this->showFullScreen();
 }
 
@@ -82,7 +86,7 @@ P300Oddball::~P300Oddball()
 
 void P300Oddball::keyPressEvent(QKeyEvent *event)
 {
-    //空按格或数字1开始练习
+    // 空按格或数字1开始练习
     if(isTrain && (event->key() == Qt::Key_Space || event->key() == Qt::Key_1))
     {
         while(imgCnt < 40)
@@ -92,7 +96,7 @@ void P300Oddball::keyPressEvent(QKeyEvent *event)
         }
         stopTrain();
     }
-    //按2开始正式实验
+    // 按2开始正式实验
     if(!isTrain && event->key() == Qt::Key_2)
     {
         isExp = true;
@@ -104,7 +108,7 @@ void P300Oddball::keyPressEvent(QKeyEvent *event)
         }
         stopExperiment();
     }
-    //结束后可按Esc退出全屏
+    // 结束后可按Esc退出全屏
     if(isFinish && event->key() == Qt::Key_Escape)
         this->showNormal();
 }
@@ -120,7 +124,7 @@ void P300Oddball::mousePressEvent(QMouseEvent *event)
 void P300Oddball::playImages(int imgNum)
 {
     QTime cross_duration, num_duration, blank_duration;
-    /*十字准星显示周期（默认）：800ms*/
+    // 十字准星显示周期（默认）：800ms
     cross_duration.start();
     ui->label->setVisible(true);
     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/cross.png"));
@@ -128,7 +132,7 @@ void P300Oddball::playImages(int imgNum)
     {
         QCoreApplication::processEvents();
     }
-    /*数字显示周期（默认）：50ms*/
+    // 数字显示周期（默认）：50ms
     num_duration.start();
     // 产生随机数
     int n = std::rand() % imgNum;
@@ -149,7 +153,7 @@ void P300Oddball::playImages(int imgNum)
     {
         QCoreApplication::processEvents();
     }
-    /*空白周期（默认）：1000ms-1200ms*/
+    // 空白周期（默认）：1000ms-1200ms
     ui->label->setVisible(false);
     blank_duration.start();
     while(blank_duration.elapsed() < (blankDurationTimeDown + rand() % (blankDurationTimeUp - blankDurationTimeDown)))
@@ -161,21 +165,21 @@ void P300Oddball::playImages(int imgNum)
 void P300Oddball::stopTrain()
 {
     isTrain = false;
-    //显示选择界面
+    // 显示选择界面
     ui->label->setVisible(true);
     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/ifgo.jpg"));
-    //计数器重置
+    // 计数器重置
     cnt_2 = 0;
     imgCnt = 0;
 }
 
 void P300Oddball::stopExperiment()
 {
-    //显示结束界面
+    // 显示结束界面
     ui->label->setVisible(true);
     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/end.jpg"));
     emit sendMark("End");
-    //可退出全屏标志位
+    // 可退出全屏标志位
     isFinish = true;
 }
 

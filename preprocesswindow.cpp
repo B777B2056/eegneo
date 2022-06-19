@@ -1,6 +1,10 @@
-#include "preprocesswindow.h"
+﻿#include "preprocesswindow.h"
 #include "ui_preprocesswindow.h"
 #include "ui_charthelp.h"
+
+#if _MSC_VER >= 1600
+#pragma execution_character_set("utf-8")
+#endif
 
 PreprocessWindow::PreprocessWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -11,9 +15,9 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
     ui(new Ui::PreprocessWindow)
 {
     ui->setupUi(this);
-    /*设置python.exe所在路径*/
+    // 设置python.exe所在路径
     Py_SetPythonHome(L"E:\\Anaconda3");
-    //模块初始化
+    // 模块初始化
     Py_Initialize();
     if (!Py_IsInitialized())
     {
@@ -25,7 +29,7 @@ PreprocessWindow::PreprocessWindow(QWidget *parent) :
     {
         QMessageBox::critical(this, this->tr("错误"), "目标模块无法打开！");
     }
-    /*链接信号与槽*/
+    // 链接信号与槽
     connect(this, SIGNAL(returnMain()), parent, SLOT(goToMainWindow()));
     connect(ui->actionlocalFile, SIGNAL(triggered()), this, SLOT(readDataFromLocal()));
     connect(ui->actionedf, SIGNAL(triggered()), this, SLOT(readEDF()));
@@ -57,14 +61,14 @@ PreprocessWindow::~PreprocessWindow()
     delete ui;
 }
 
-/*==================================== 波形显示 ======================================*/
+//==================================== 波形显示 ======================================
 
-/*重设通道电极名称*/
+// 重设通道电极名称
 void PreprocessWindow::setChannelsName()
 {
     if(channelsName)
     {
-        /*弹窗口让用户输入各通道名称*/
+        // 弹窗口让用户输入各通道名称
         SetChannelName scl(channelNum);
         int rec = scl.exec();
         if(rec == QDialog::Accepted)
@@ -72,18 +76,18 @@ void PreprocessWindow::setChannelsName()
             for(int i = 0; i < channelNum; i++)
                 channelsName[i] = scl.names[i].toStdString();
         }
-        /*清空之前的内容*/
+        // 清空之前的内容
         for(int j = 0; j < channelNum; j++)
         {
             axisY->remove(QString::number(j + 1));
         }
-        /*设置通道标签*/
+        // 设置通道标签
         for(int j = channelNum - 1; j >= 0; j--)
             axisY->append(QString::fromStdString(channelsName[j]), maxVotagle * (2 * channelNum - 2 * j - 1));
     }
 }
 
-/*从本程序缓存文件中导入数据*/
+// 从本程序缓存文件中导入数据
 void PreprocessWindow::readDataFromLocal()
 {
     if(!samplePoints.empty())
@@ -122,7 +126,7 @@ void PreprocessWindow::readDataFromLocal()
     }
     list = PyList_New(0);
     data_file.open(samplesFile.toStdString(), std::ios::in);
-    /*计算总时间*/
+    // 计算总时间
     while(data_file.peek() != EOF)
     {
         std::string str;
@@ -132,7 +136,7 @@ void PreprocessWindow::readDataFromLocal()
     allTime = (double)col  / (double)sampleFreq;
     col = 0;
     data_file.close();
-    /*读取数据点*/
+    // 读取数据点
     data_file.open(samplesFile.toStdString(), std::ios::in);
     while(data_file.peek() != EOF)
     {
@@ -160,7 +164,7 @@ void PreprocessWindow::readDataFromLocal()
         ++col;
     }
     data_file.close();
-    /*读取事件*/
+    // 读取事件
     col = 0;
     std::map<std::string, long long> marks;
     event_file.open(eventsFile.toStdString(), std::ios::in);
@@ -201,22 +205,22 @@ void PreprocessWindow::readDataFromLocal()
         ++col;
     }
     event_file.close();
-    /*设置基本信息*/
+    // 设置基本信息
     ui->label_5->setText(QString::number(channelNum));
     ui->label_7->setText(QString::number(col - 1));
     ui->label_9->setText("1");
     ui->label_11->setText(QString::number(sampleFreq) + "Hz");
     ui->label_13->setText(QString::number(allTime) + "s");
-    /*内存分配*/
+    // 内存分配
     channelsName = new std::string[channelNum];
     for(int i = 0; i < channelNum; i++)
         channelsName[i] = std::to_string(i + 1);
-    /*初始化绘图板*/
+    // 初始化绘图板
     initChart(col - 1);
     hasOpen = true;
-    /*画图*/
+    // 画图
     paintChart();
-    /*导出raw对象*/
+    // 导出raw对象
     arg = PyTuple_New(3);
     PyTuple_SetItem(arg, 0, Py_BuildValue("i", channelNum));
     PyTuple_SetItem(arg, 1, Py_BuildValue("d", sampleFreq));
@@ -230,14 +234,14 @@ void PreprocessWindow::readDataFromLocal()
     PyObject_CallObject(pFun, arg);
 }
 
-/*从外部EDF/EDF+文件读取数据*/
+// 从外部EDF/EDF+文件读取数据
 void PreprocessWindow::readEDF()
 {
     if(!samplePoints.empty())
         samplePoints.clear();
     if(!eventLines.empty())
         eventLines.clear();
-    /*用户选择文件路径*/
+    // 用户选择文件路径
     filePath = QFileDialog::getOpenFileName(this,
         tr("选择edf文件"),
         "",
@@ -253,7 +257,7 @@ void PreprocessWindow::readEDF()
        QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
        return;
    }
-   /*是否从通道导入事件*/
+   // 是否从通道导入事件
    int eventIndex = -1;
    std::string eventChannel = "";
    int reply = QMessageBox::question(this, this->tr(""), "是否从通道内导入事件？", QMessageBox::Ok, QMessageBox::No);
@@ -325,7 +329,7 @@ void PreprocessWindow::readEDF()
        if(markDict.empty())
             eventLines.push_back(std::make_pair(std::to_string(PyLong_AsLong(eventId)), PyLong_AsLongLong(time) / sampleFreq));
        else
-            eventLines.push_back(std::make_pair(markDict[PyLong_AsLong(eventId)], PyLong_AsLongLong(time) / sampleFreq));
+            eventLines.emplace_back(markDict[PyLong_AsLong(eventId)], PyLong_AsLongLong(time) / sampleFreq);
    }
    // 得到时间
    pFun = PyObject_GetAttrString(pModule,"getTime");
@@ -345,30 +349,30 @@ void PreprocessWindow::readEDF()
            samplePoints[i].push_back(QPointF(PyFloat_AsDouble(PyList_GetItem(timeList, j)), PyFloat_AsDouble(PyList_GetItem(row, j))));
        }
    }
-   /*设置标志量*/
+   // 设置标志量
    channelNum = ((eventIndex == -1) ? cnLen : cnLen - 1);
    allTime = PyFloat_AsDouble(PyList_GetItem(timeList, dataListLen1 - 1));
-   /*设置基本信息*/
+   // 设置基本信息
    ui->label_5->setText(QString::number(channelNum));
    ui->label_7->setText(QString::number(eventListLen));
    ui->label_9->setText("1");
    ui->label_11->setText(QString::number(sampleFreq) + "Hz");
    ui->label_13->setText(QString::number(allTime) + "s");
-   /*绘图板初始化*/
+   // 绘图板初始化
    initChart(eventListLen);
    hasOpen = true;
-   /*画图*/
+   // 画图
    paintChart();
 }
 
-/*读取eeg文件*/
+// 读取eeg文件
 void PreprocessWindow::readEEG()
 {
     if(!samplePoints.empty())
         samplePoints.clear();
     if(!eventLines.empty())
         eventLines.clear();
-    /*用户选择文件路径*/
+    // 用户选择文件路径
     QString filename;
     filename = QFileDialog::getOpenFileName(this,
         tr("选择vhdr文件"),
@@ -430,7 +434,7 @@ void PreprocessWindow::readEEG()
        PyObject *row = PyList_GetItem(eventList, i);
        PyObject *time = PyList_GetItem(row, 0);
        PyObject *eventId = PyList_GetItem(row, 2);
-       eventLines.push_back(std::make_pair(markDict[PyLong_AsLong(eventId)], PyLong_AsLongLong(time) / sampleFreq));
+       eventLines.emplace_back(markDict[PyLong_AsLong(eventId)], PyLong_AsLongLong(time) / sampleFreq);
    }
    // 得到时间
    pFun = PyObject_GetAttrString(pModule,"getTime");
@@ -449,26 +453,26 @@ void PreprocessWindow::readEEG()
        }
    }
    Py_Finalize();
-   /*设置标志量*/
+   // 设置标志量
    channelNum = cnLen;
    allTime = PyFloat_AsDouble(PyList_GetItem(timeList, dataListLen1 - 1));
-   /*设置基本信息*/
+   // 设置基本信息
    ui->label_5->setText(QString::number(channelNum));
    ui->label_7->setText(QString::number(dataListLen1));
    ui->label_9->setText("1");
    ui->label_11->setText(QString::number(sampleFreq) + "Hz");
    ui->label_13->setText(QString::number(allTime) + "s");
-   /*绘图板初始化*/
+   // 绘图板初始化
    initChart(eventListLen);
    hasOpen = true;
-   /*画图*/
+   // 画图
    paintChart();
 }
 
-/*绘图初始化*/
+// 绘图初始化
 void PreprocessWindow::initChart(int markNum)
 {
-    /*初始化*/
+    // 初始化
     if(!hasOpen)
     {
         help = new ChartHelp(this);
@@ -529,22 +533,22 @@ void PreprocessWindow::initChart(int markNum)
     QListWidgetItem* item = new QListWidgetItem(ui->listWidget);
     item->setSizeHint(QSize(1400, 800));
     ui->listWidget->setItemWidget(item, help->ui->widget_pre_wave);
-    /*初始化Mark名称数组*/
+    // 初始化Mark名称数组
     for(int i = 0; i < markNum; i++)
         pItems.push_back(new QGraphicsSimpleTextItem(chart));
 }
 
-/*绘图*/
+// 绘图
 void PreprocessWindow::paintChart()
 {
-    /*清空之前的内容*/
+    // 清空之前的内容
     std::size_t i;
     for(int j = 0; j < channelNum; j++)
     {
         series[j]->clear();
         axisY->remove(QString::fromStdString(channelsName[j]));
     }
-    /*设置起点与终点*/
+    // 设置起点与终点
     double s, e;
     if(isJmp)
     {
@@ -556,13 +560,13 @@ void PreprocessWindow::paintChart()
         s = start;
         e = s + interval;
     }
-    /*设置坐标轴范围*/
+    // 设置坐标轴范围
     axisX->setRange(s, e);
     axisY->setMax(channelNum * maxVotagle * 2);
-    /*设置通道标签*/
+    // 设置通道标签
     for(int j = channelNum - 1; j >= 0; j--)
         axisY->append(QString::fromStdString(channelsName[j]), maxVotagle * (2 * channelNum - 2 * j - 1));
-    /*绘制数据点(1s时间间隔绘制100个点)*/
+    // 绘制数据点(1s时间间隔绘制100个点)
     std::map<int, std::vector<QPointF>>::iterator sample_iter;
     for(sample_iter = samplePoints.begin(); sample_iter != samplePoints.end(); sample_iter++)
     {
@@ -577,10 +581,10 @@ void PreprocessWindow::paintChart()
             }
         }
     }
-    /*绘制事件*/
+    // 绘制事件
     for(i = 0; i < eventLines.size(); i++)
     {
-        /*画直线*/
+        // 画直线
         QLineSeries *line = new QLineSeries;
         QPen splinePen;
         splinePen.setColor(markColors[eventLines[i].first]);
@@ -591,13 +595,13 @@ void PreprocessWindow::paintChart()
         chart->setAxisX(axisX, line);
         chart->setAxisY(axisY, line);
         lines.push_back(line);
-        /*显示文字标记*/
+        // 显示文字标记
         pItems[i]->setText(QString::fromStdString(eventLines[i].first));
         pItems[i]->setPos(chart->mapToPosition(QPointF(eventLines[i].second, channelNum * maxVotagle * 2 -  maxVotagle), line));
     }
 }
 
-/*生成随机颜色用于不同的Mark*/
+// 生成随机颜色用于不同的Mark
 QColor PreprocessWindow::getRadomColor(int baseR, int baseG, int baseB)
 {
     return QColor(baseR + (-10 + rand() % 20), baseG + (-10 + rand() % 20), baseB + (-10 + rand() % 20));
@@ -622,7 +626,7 @@ void PreprocessWindow::on_comboBox_2_currentIndexChanged(int index)
         maxVotagle = 100;
     else
         maxVotagle = 200;
-    /*重新绘图*/
+    // 重新绘图
     paintChart();
 }
 
@@ -651,7 +655,7 @@ void PreprocessWindow::on_pushButton_3_clicked()
     }
 }
 
-/*切换显示区域*/
+// 切换显示区域
 void PreprocessWindow::on_pushButton_4_clicked()
 {
     if(jmp_start >= 0.0 && jmp_end >= 0.0 && jmp_start < jmp_end && jmp_end < allTime)
@@ -663,7 +667,7 @@ void PreprocessWindow::on_pushButton_4_clicked()
     isJmp = false;
 }
 
-/*波形重叠/取消重叠复用按钮*/
+// 波形重叠/取消重叠复用按钮
 void PreprocessWindow::on_pushButton_5_clicked()
 {
     if(!isOverlapping)
@@ -708,8 +712,8 @@ void PreprocessWindow::on_lineEdit_2_editingFinished()
     }
 }
 
-/*==================================== 滤波 ======================================*/
-/*得到滤波器设置*/
+//==================================== 滤波 ======================================
+// 得到滤波器设置
 void PreprocessWindow::receiveFilterInfo(double l, double h, int o)
 {
     this->lowPass = l;
@@ -717,7 +721,7 @@ void PreprocessWindow::receiveFilterInfo(double l, double h, int o)
     this->order = o;
 }
 
-/*滤波并显示波形*/
+// 滤波并显示波形
 void PreprocessWindow::filt()
 {
     filterSetting *fs = new filterSetting(this);
@@ -727,10 +731,9 @@ void PreprocessWindow::filt()
         if((lowPass > 0.0) && (highPass > 0.0))
         {
             int k;
-            MyFilter f;
-            double y_n, coff[order];
-            QQueue<double> buf[channelNum];
-            f.countBandPassCoef(order, sampleFreq, coff, lowPass, highPass);  // 计算滤波器系数
+            double y_n, *coff = new double[order];
+            QQueue<double> *buf = new QQueue<double>[channelNum];
+            Filter::countBandPassCoef(order, sampleFreq, coff, lowPass, highPass);  // 计算滤波器系数
             // 重新计算数据点y值
             std::map<int, std::vector<QPointF>>::iterator sample_iter;
             for(sample_iter = samplePoints.begin(); sample_iter != samplePoints.end(); sample_iter++)
@@ -741,17 +744,17 @@ void PreprocessWindow::filt()
                         buf[sample_iter->first].enqueue((sample_iter->second)[i].y());
                     else
                     {
-                        /*计算滤波后的值*/
+                        // 计算滤波后的值
                         y_n = 0.0;
                         for(k = 0; k <= order; k++)
                         {
                             y_n += coff[k] * buf[sample_iter->first][order - k];
                         }
-                        /*队列左移一位*/
+                        // 队列左移一位
                         buf[sample_iter->first].dequeue();
-                        /*原始值入队*/
+                        // 原始值入队
                         buf[sample_iter->first].enqueue((sample_iter->second)[i].y());
-                        /*替换数据点*/
+                        // 替换数据点
                         (sample_iter->second)[i] = QPointF((sample_iter->second)[i].x(), y_n);
                     }
                 }
@@ -767,13 +770,15 @@ void PreprocessWindow::filt()
                 return;
             }
             PyObject_CallObject(pFun, arg);
+            delete []coff;
+            delete []buf;
         }
         else
             QMessageBox::critical(this, this->tr("错误"), "所需信息未填写或数值错误！", QMessageBox::Ok);
     }
 }
 
-/*==================================== 功率谱估计 ======================================*/
+// ==================================== 功率谱估计 ======================================
 void PreprocessWindow::getStartTimePSD(double a)
 {
     this->startTimePSD = a;
@@ -799,12 +804,12 @@ void PreprocessWindow::plotPSD()
             stopTimePSD = allTime;
         if(startTimePSD >= stopTimePSD)
         {
-            QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+            QMessageBox::critical(this, this->tr("错误"), "参数填写错误");
             return;
         }
-        int k, len = samplePoints[0].size();
+        int k, len = static_cast<int>(samplePoints[0].size());
         unsigned int i;
-        double *points[channelNum];
+        double **points = new double*[channelNum];
         for(k = 0; k < channelNum; k++)
             points[k] = new double[len];
         std::map<int, std::vector<QPointF> >::iterator sample_iter;
@@ -824,7 +829,7 @@ void PreprocessWindow::plotPSD()
     }
 }
 
-/*==================================== 维格纳分布 ======================================*/
+// ==================================== 维格纳分布 ======================================
 void PreprocessWindow::getBeginTime(double a)
 {
     this->startTimeWigner = a;
@@ -865,7 +870,7 @@ void PreprocessWindow::plotWigner()
         }
         if(isFind)
         {
-            int j, k = 0, len = samplePoints[i].size();
+            int j, k = 0, len = static_cast<int>(samplePoints[0].size());
             std::vector<double> points;
             for(j = 0; j < len; j++)
             {
@@ -879,7 +884,7 @@ void PreprocessWindow::plotWigner()
             w->show();
         }
         else
-            QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+            QMessageBox::critical(this, this->tr("错误"), "参数填写错误");
     }
 }
 
@@ -921,7 +926,7 @@ void PreprocessWindow::plotDWT()
             pFun = PyObject_GetAttrString(pModule,"plotDWT");
             if(!pFun)
             {
-                QMessageBox::critical(this, this->tr("错误"), "未找到目标函数!", QMessageBox::Ok);
+                QMessageBox::critical(this, this->tr("错误"), "未找到目标函数", QMessageBox::Ok);
                 return;
             }
             PyObject_CallObject(pFun, arg);
@@ -935,7 +940,7 @@ void PreprocessWindow::plotDWT()
         }
         else
         {
-            QMessageBox::critical(this, this->tr("错误"), "参数填写错误！");
+            QMessageBox::critical(this, this->tr("错误"), "参数填写错误");
             return;
         }
     }

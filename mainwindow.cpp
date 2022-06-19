@@ -1,19 +1,23 @@
-#include "mainwindow.h"
-#include "ui_mainwindow.h"
+﻿#include "mainwindow.h"
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
+    participantNum(""),
     tempFiles(""),
+    backgroundWindow(this),
+    acquisitionWindow(this),
+    preprocessWindow(this),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    b = new Background(this);
-    m = new AcquisitionWindow(this);
-    p = new PreprocessWindow(this);
-    ui->stackedWidget->addWidget(b);
-    ui->stackedWidget->addWidget(m);
-    ui->stackedWidget->addWidget(p);
-    ui->stackedWidget->setCurrentWidget(b);
+    QObject::connect(ui->pushButton, SIGNAL(clicked()), this, SLOT(onPushButtonClicked()));
+    QObject::connect(ui->pushButton_2, SIGNAL(clicked()), this, SLOT(onPushButton2Clicked()));
+    /*显示可选界面*/
+    ui->stackedWidget->addWidget(&backgroundWindow);
+    ui->stackedWidget->addWidget(&acquisitionWindow);
+    ui->stackedWidget->addWidget(&preprocessWindow);
+    ui->stackedWidget->setCurrentWidget(&backgroundWindow);
     /*设置界面背景色*/
     QPalette palette(this->palette());
     palette.setColor(QPalette::Background, Qt::white);
@@ -22,44 +26,29 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
-    /*删除缓存文件*/
-//    std::remove((tempFiles + "_samples.txt").toStdString().c_str());
-//    std::remove((tempFiles + "_events.txt").toStdString().c_str());
     delete ui;
 }
 
-void MainWindow::getBasicInfo(QString a, QString b)
+void MainWindow::getBasicInfo(QString participantNum, QString tempFiles)
 {
-    this->participantNum = a;
-    this->tempFiles = b;
+    this->participantNum = participantNum;
+    this->tempFiles = tempFiles;
     this->setWindowTitle("EEG信号采集平台@被试编号：" + participantNum);
 }
 
 void MainWindow::goToMainWindow()
 {
-    ui->pushButton->setVisible(true);
-    ui->pushButton->setEnabled(true);
-    ui->pushButton_2->setVisible(true);
-    ui->pushButton_2->setEnabled(true);
-    ui->stackedWidget->setCurrentWidget(b);
+    this->goToOtherWindow(&backgroundWindow, true);
 }
 
-void MainWindow::on_pushButton_clicked()
+void MainWindow::onPushButtonClicked()
 {
-    m->init();
-    ui->stackedWidget->setCurrentWidget(m);
-    ui->pushButton->setVisible(false);
-    ui->pushButton->setEnabled(false);
-    ui->pushButton_2->setVisible(false);
-    ui->pushButton_2->setEnabled(false);
+    acquisitionWindow.start();
+    this->goToOtherWindow(&acquisitionWindow, false);
 }
 
-void MainWindow::on_pushButton_2_clicked()
+void MainWindow::onPushButton2Clicked()
 {
-    p->tempFile = tempFiles;
-    ui->stackedWidget->setCurrentWidget(p);
-    ui->pushButton->setVisible(false);
-    ui->pushButton->setEnabled(false);
-    ui->pushButton_2->setVisible(false);
-    ui->pushButton_2->setEnabled(false);
+    preprocessWindow.tempFile = tempFiles;
+    this->goToOtherWindow(&preprocessWindow, false);
 }

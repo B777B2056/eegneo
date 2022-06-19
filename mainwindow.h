@@ -1,11 +1,16 @@
-#ifndef MAINWINDOW_H
+﻿#ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <cstdlib>
+#include <memory>
 #include "mainbackground.h"
 #include "acquisitionwindow.h"
 #include "preprocesswindow.h"
+#include "ui_mainwindow.h"
+
+class BackgroundWindow;
+class AcquisitionWindow;
+class PreprocessWindow;
 
 namespace Ui {
 class MainWindow;
@@ -21,20 +26,29 @@ public:
 
 public slots:
     void getBasicInfo(QString, QString);  // 获取基本信息
-    void goToMainWindow();
+    void goToMainWindow();  // 返回主界面
 
 private slots:
-    void on_pushButton_clicked();
-
-    void on_pushButton_2_clicked();
+    void onPushButtonClicked();
+    void onPushButton2Clicked();
 
 private:
     QString participantNum, tempFiles;
-    Background *b;
-    AcquisitionWindow *m;
-    PreprocessWindow *p;
-
+    BackgroundWindow backgroundWindow;
+    AcquisitionWindow acquisitionWindow;
+    PreprocessWindow preprocessWindow;
     Ui::MainWindow *ui;
+
+private:
+    template<class Window>
+    void goToOtherWindow(Window* target, bool isButtonVisable)
+    {
+        ui->stackedWidget->setCurrentWidget(target);
+        ui->pushButton->setVisible(isButtonVisable);
+        ui->pushButton->setEnabled(isButtonVisable);
+        ui->pushButton_2->setVisible(isButtonVisable);
+        ui->pushButton_2->setEnabled(isButtonVisable);
+    }
 };
 
 #endif // INITWINDOW_H

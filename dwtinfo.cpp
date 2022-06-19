@@ -1,5 +1,9 @@
-#include "dwtinfo.h"
+﻿#include "dwtinfo.h"
 #include "ui_dwtinfo.h"
+
+#if _MSC_VER >= 1600
+#pragma execution_character_set("utf-8")
+#endif
 
 DwtInfo::DwtInfo(QWidget *parent) :
     QDialog(parent),
@@ -21,7 +25,7 @@ void DwtInfo::on_lineEdit_editingFinished()
     }
     catch (...)
     {
-        QMessageBox::critical(this, this->tr("错误"), "所需信息输入错误！", QMessageBox::Ok);
+        QMessageBox::critical(this, this->tr("错误"), "所需信息输入错误", QMessageBox::Ok);
     }
 }
 
@@ -33,7 +37,7 @@ void DwtInfo::on_lineEdit_2_editingFinished()
     }
     catch (...)
     {
-        QMessageBox::critical(this, this->tr("错误"), "所需信息输入错误！", QMessageBox::Ok);
+        QMessageBox::critical(this, this->tr("错误"), "所需信息输入错误", QMessageBox::Ok);
     }
 }
 

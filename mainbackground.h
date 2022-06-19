@@ -1,22 +1,22 @@
-#ifndef MAINBACKGROUND_H
+﻿#ifndef MAINBACKGROUND_H
 #define MAINBACKGROUND_H
 
 #include <QWidget>
 
 namespace Ui {
-class Background;
+class BackgroundWindow;
 }
 
-class Background : public QWidget
+class BackgroundWindow : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit Background(QWidget *parent = nullptr);
-    ~Background();
+    explicit BackgroundWindow(QWidget *parent = nullptr);
+    ~BackgroundWindow();
 
 private:
-    Ui::Background *ui;
+    Ui::BackgroundWindow *ui;
 };
 
 #endif // MAINBACKGROUND_H

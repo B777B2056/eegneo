@@ -1,4 +1,4 @@
-#ifndef PREPROCESSWINDOW_H
+﻿#ifndef PREPROCESSWINDOW_H
 #define PREPROCESSWINDOW_H
 
 #include <iostream>
@@ -12,6 +12,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <utility>
 #include "charthelp.h"
 #include "setchannelname.h"
 #include "seteventchannel.h"

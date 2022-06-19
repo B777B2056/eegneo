@@ -1,4 +1,4 @@
-#ifndef WORKTHREAD_H
+﻿#ifndef WORKTHREAD_H
 #define WORKTHREAD_H
 
 #include <QTime>
@@ -10,12 +10,15 @@
 #include <QUdpSocket>
 #include <QHostAddress>
 #include <QHostInfo>
+#include <QMutex>
 #include <vector>
 #include <cmath>
 #include <string>
 #include <fstream>
-#include <filter.h>
-#include <iostream>
+#include <deque>
+#include <thread>
+#include <mutex>
+#include "filter.h"
 #include "qextserialport.h"
 #include "enum.h"
 
@@ -23,25 +26,25 @@
 //#define SAMPLE_RATE 1000  // 采样率
 #define QESP_NO_PORTABILITY_WARN
 
-/*数据滤波与记录线程*/
+// 数据滤波与记录线程
 class DataProcessThread : public QThread
 {
     Q_OBJECT
 public:
     DataProcessThread(int channels_num, int sampleRate, BoardType b, QString c="");
-    ~DataProcessThread();
+    virtual ~DataProcessThread() override;
 
 protected:
     void run() override;
 
 private:
+    QMutex _mutex;
     int sp, channels_num, filt_flag, cnt;
     std::vector<double> sum;
     const double cofe;
     bool isFilt, isRec, isUseOther;
     BoardType board;
     QString com;
-//    QProcess *process;
     QUdpSocket *client;
     std::ofstream samplesWrite;
     std::ofstream eventsWrite;  // 标记缓存txt文件输出流
@@ -50,17 +53,15 @@ private:
     std::vector<QQueue<double> > bandPassBuffer, notchBuffer;  // 滤波时各通道数据缓存区，长度为滤波器阶数
     std::vector<QQueue<QPointF> > averBuffer;
     double *bandPassCoff, *notchCoff;  // FIR I型带通滤波器与陷波器冲激响应
-    void processData();  // 处理数据
-    double conv(FilterType type, int index);
-    void saveDataTEMP();
+    void processData();  // 处理数据（滤波）
+    double conv(FilterType type, std::size_t index);
     void boardInit();
-    QString getLocalIP();
     double _turnBytes2uV(char byte1, char byte2, char byte3);
     double _turnBytes2uV(unsigned char *bytes);
 
 signals:
     void sendData(std::vector<double>);  // 发送数据至主线程
-    void inFilt();  // 滤波数据已产生的信号
+    void inFilt();  // 滤波数据已经得到
 
 private slots:
     void getDataFromShanxi();  // 获取实时更新的EEG数据(山西设备)
@@ -73,4 +74,4 @@ public slots:
     void startFilt(int, int, int);
 };
 
-#endif // WORKTHREAD_H
+#endif

@@ -1,4 +1,4 @@
-#include "analysistools.h"
+﻿#include "analysistools.h"
 
 void fft(double *x, double *y, int n, int sign)
 {
@@ -74,7 +74,7 @@ void dwt(double *g, double *h, int wlen, double *c, double *d, int m, double *sc
     double p, q;
     flag[0] = 0;
     for(i = 0; i < m; i++)
-        flag[i + 1] = flag[i] + sca[i];
+        flag[i + 1] = flag[i] + static_cast<int>(sca[i]);
     for(j = 1; j <= m; j++)
     {
         for(i = 0; i < sca[j]; i++)
@@ -84,7 +84,7 @@ void dwt(double *g, double *h, int wlen, double *c, double *d, int m, double *sc
             {
                 mid = k + 2 * i;
                 if(mid >= sca[j - 1])
-                    mid -= sca[j - 1];
+                    mid -= static_cast<int>(sca[j - 1]);
                 p += h[k] * c[flag[j - 1] + mid];
                 q += g[k] * c[flag[j - 1] + mid];
             }

@@ -1,4 +1,4 @@
-#ifndef PSD_H
+﻿#ifndef PSD_H
 #define PSD_H
 
 #include <QWidget>
@@ -35,15 +35,14 @@ private:
     QChart *chart;
     QSplineSeries **series;
     QValueAxis *axisX, *axisY;
-    /*绘图初始化*/
+    // 绘图初始化f
     void initChart();
-    /* 计算功率谱面密度
-     * x 输入信号数组
-     * len 输入信号数组长度
-     * m 分段的长度
-     * fflLen 功率谱变换所用的傅里叶变换长度
-     * type 功率谱类型：线性谱还是对数谱
-     */
+    // 计算功率谱面密度
+    // x 输入信号数组
+    // len 输入信号数组长度
+    // m 分段的长度
+    // fflLen 功率谱变换所用的傅里叶变换长度
+    // type 功率谱类型：线性谱还是对数谱
     void calcPSD(double *x, int len, int i);
 
     Ui::PSD *ui;

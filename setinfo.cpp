@@ -1,4 +1,4 @@
-#include "setinfo.h"
+﻿#include "setinfo.h"
 #include "ui_setinfo.h"
 
 SetInfo::SetInfo(QWidget *parent) :
