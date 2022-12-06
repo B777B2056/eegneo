@@ -18,12 +18,14 @@ public:
     using eegneo::DataSampler::DataSampler;
 
 private:
-    void doSample() override 
+    void run() override 
     {  
-        std::unique_lock<std::mutex> l(mMutex_);
-        for (int i = 0; i < mBuf_.size(); ++i)
+        for (;;)
         {
-            mBuf_[i] = rand() % 10;
+            for (int i = 0; i < mBuf_.size(); ++i)
+            {
+                mBuf_[i] = rand() % 10;
+            }
         }
     }
 };

@@ -3,18 +3,56 @@
 
 namespace eegneo
 {
+    constexpr const char* RECORD_FILE_PATH = "temp.txt";
+
     DataSampler::DataSampler(std::size_t channelNum)
-        : mThread_{&DataSampler::doSample, this}
+        : mIsSampled_(false)
+        , mSampleThread_{&DataSampler::doSample, this}
+        , mRecordThread_{&DataSampler::doRecord, this}
+        , mRecordFile_{RECORD_FILE_PATH}
         , mBuf_(channelNum)
     {
-
+        if(!mRecordFile_.open(QIODevice::WriteOnly | QIODevice::Text))
+        {
+            // TODO: 文件创建失败，处理
+        }
     }
 
     DataSampler::~DataSampler()
     {
-        if (mThread_.joinable())
+        if (mSampleThread_.joinable())
         {
-            mThread_.join();
+            mSampleThread_.join();
+        }
+        mRecordFile_.close();
+    }
+
+    void DataSampler::doRecord()
+    {
+        std::unique_lock<std::mutex> l(mMutex_);
+        for (;;)
+        {
+            while (!mIsSampled_)
+            {
+                mCv_.wait(l);
+            }
+            for (double& val : mBuf_)
+            {
+                mRecordFile_.write((char*)&val, sizeof(val));
+                mRecordFile_.write(",");
+            }
+            mRecordFile_.write("\n");
+        }
+    }
+
+    void DataSampler::doSample()
+    {
+        std::unique_lock<std::mutex> l(mMutex_);
+        for (;;)
+        {
+            this->run();
+            mIsSampled_ = true;
+            mCv_.notify_all();
         }
     }
 
@@ -41,7 +79,7 @@ namespace eegneo
         mSerialPort_.close();
     }
 
-    void ShanghaiDataSampler::doSample()
+    void ShanghaiDataSampler::run()
     {
         if (!mSerialPort_.isOpen())
         {
