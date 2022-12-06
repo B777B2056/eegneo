@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -19,7 +20,7 @@ namespace eegneo
         DataSampler& operator=(DataSampler&&) = default;
         virtual ~DataSampler();
 
-        double data(std::size_t channelIdx) const { return mBuf_.at(channelIdx); }
+        double data(std::size_t channelIdx) const;
 
     protected:
         QVector<double> mBuf_;
@@ -27,7 +28,8 @@ namespace eegneo
 
     private:
         bool mIsSampled_;
-        std::mutex mMutex_;
+        std::atomic_bool mIsEnd_;
+        mutable std::mutex mMutex_;
         std::condition_variable mCv_;
         std::thread mSampleThread_; // 板子采样线程
         std::thread mRecordThread_; // 记录数据线程（记录到文件中）

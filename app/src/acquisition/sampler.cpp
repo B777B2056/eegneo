@@ -7,31 +7,45 @@ namespace eegneo
 
     DataSampler::DataSampler(std::size_t channelNum)
         : mIsSampled_(false)
+        , mIsEnd_(false)
         , mSampleThread_{&DataSampler::doSample, this}
         , mRecordThread_{&DataSampler::doRecord, this}
         , mRecordFile_{RECORD_FILE_PATH}
         , mBuf_(channelNum)
     {
-        if(!mRecordFile_.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
-            // TODO: 文件创建失败，处理
-        }
+        
     }
 
     DataSampler::~DataSampler()
     {
+        mIsEnd_.store(true);
         if (mSampleThread_.joinable())
         {
             mSampleThread_.join();
         }
+        if (mRecordThread_.joinable())
+        {
+            mRecordThread_.join();
+        }
         mRecordFile_.close();
+    }
+
+    double DataSampler::data(std::size_t channelIdx) const
+    {
+        std::unique_lock<std::mutex> l(mMutex_);
+        return mBuf_.at(channelIdx);
     }
 
     void DataSampler::doRecord()
     {
-        std::unique_lock<std::mutex> l(mMutex_);
-        for (;;)
+        if (!mRecordFile_.open(QIODevice::WriteOnly | QIODevice::Text))
         {
+            // TODO: 文件创建失败，处理
+            return;
+        }
+        while (!mIsEnd_.load())
+        {
+            std::unique_lock<std::mutex> l(mMutex_);
             while (!mIsSampled_)
             {
                 mCv_.wait(l);
@@ -47,9 +61,9 @@ namespace eegneo
 
     void DataSampler::doSample()
     {
-        std::unique_lock<std::mutex> l(mMutex_);
-        for (;;)
+        while (!mIsEnd_.load())
         {
+            std::unique_lock<std::mutex> l(mMutex_);
             this->run();
             mIsSampled_ = true;
             mCv_.notify_all();

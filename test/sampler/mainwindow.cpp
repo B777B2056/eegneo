@@ -78,9 +78,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    delete ui;
     delete mTimer_;
     delete mDataSampler_;
+    delete ui;
 }
 
 void MainWindow::update()

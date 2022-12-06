@@ -20,12 +20,9 @@ public:
 private:
     void run() override 
     {  
-        for (;;)
+        for (int i = 0; i < mBuf_.size(); ++i)
         {
-            for (int i = 0; i < mBuf_.size(); ++i)
-            {
-                mBuf_[i] = rand() % 10;
-            }
+            mBuf_[i] = rand() % 10;
         }
     }
 };
