@@ -1,24 +1,25 @@
 #include "acquisition/sampler.h"
+#include <cstring>
 #include <QByteArray>
+
+#include <iostream>
 
 namespace eegneo
 {
-    constexpr const char* RECORD_FILE_PATH = "temp.txt";
+    constexpr const char* RECORD_FILE_PATH = "E:/jr/eegneo/temp.txt";
 
     DataSampler::DataSampler(std::size_t channelNum)
-        : mIsSampled_(false)
-        , mIsEnd_(false)
+        : mChannelNum_(channelNum)
+        , mIsStop_{false}
         , mSampleThread_{&DataSampler::doSample, this}
         , mRecordThread_{&DataSampler::doRecord, this}
-        , mRecordFile_{RECORD_FILE_PATH}
-        , mBuf_(channelNum)
     {
         
     }
 
     DataSampler::~DataSampler()
     {
-        mIsEnd_.store(true);
+        mIsStop_.store(true);
         if (mSampleThread_.joinable())
         {
             mSampleThread_.join();
@@ -27,46 +28,45 @@ namespace eegneo
         {
             mRecordThread_.join();
         }
-        mRecordFile_.close();
     }
 
     double DataSampler::data(std::size_t channelIdx) const
     {
-        std::unique_lock<std::mutex> l(mMutex_);
-        return mBuf_.at(channelIdx);
+        std::shared_lock<std::shared_mutex> lock(mReadWriteMutex_);
+        return mBuf_[channelIdx];
     }
 
     void DataSampler::doRecord()
     {
-        if (!mRecordFile_.open(QIODevice::WriteOnly | QIODevice::Text))
+        thread_local std::fstream recordFile{RECORD_FILE_PATH, std::ios::out};
+        if (!recordFile.is_open())
         {
             // TODO: 文件创建失败，处理
-            return;
         }
-        while (!mIsEnd_.load())
+        thread_local std::array<double, 16> tempBuf;
+        while (!mIsStop_.load())
         {
-            std::unique_lock<std::mutex> l(mMutex_);
-            while (!mIsSampled_)
             {
-                mCv_.wait(l);
+                std::shared_lock<std::shared_mutex> lock(mReadWriteMutex_);
+                while (mQueue_.empty());
+                tempBuf = mQueue_.front();
+                mQueue_.pop_front();
             }
-            for (double& val : mBuf_)
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
             {
-                mRecordFile_.write((char*)&val, sizeof(val));
-                mRecordFile_.write(",");
+                recordFile << tempBuf[i] << ",";
             }
-            mRecordFile_.write("\n");
+            recordFile << "\n";
         }
     }
 
     void DataSampler::doSample()
     {
-        while (!mIsEnd_.load())
+        while (!mIsStop_.load())
         {
-            std::unique_lock<std::mutex> l(mMutex_);
             this->run();
-            mIsSampled_ = true;
-            mCv_.notify_all();
+            std::unique_lock<std::shared_mutex> l(mReadWriteMutex_);
+            mQueue_.emplace_back(mBuf_);
         }
     }
 

@@ -1,9 +1,11 @@
 #pragma once
 #include <atomic>
-#include <condition_variable>
+#include <array>
+#include <deque>
 #include <mutex>
+#include <shared_mutex>
 #include <thread>
-#include <QFile>
+#include <fstream>
 #include <QSerialPort>
 #include <QString>
 #include <QVector>
@@ -23,17 +25,16 @@ namespace eegneo
         double data(std::size_t channelIdx) const;
 
     protected:
-        QVector<double> mBuf_;
+        std::array<double, 16> mBuf_;
+        std::size_t mChannelNum_;
         virtual void run() = 0;
 
     private:
-        bool mIsSampled_;
-        std::atomic_bool mIsEnd_;
-        mutable std::mutex mMutex_;
-        std::condition_variable mCv_;
+        std::atomic_bool mIsStop_;
+        mutable std::shared_mutex mReadWriteMutex_;
         std::thread mSampleThread_; // 板子采样线程
         std::thread mRecordThread_; // 记录数据线程（记录到文件中）
-        QFile mRecordFile_;
+        std::deque<std::array<double, 16>> mQueue_;
 
         void doRecord();
         void doSample();

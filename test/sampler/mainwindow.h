@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 #include <QMainWindow>
+#include <QList>
 #include "acquisition/sampler.h"
 
 QT_BEGIN_NAMESPACE
@@ -20,7 +21,7 @@ public:
 private:
     void run() override 
     {  
-        for (int i = 0; i < mBuf_.size(); ++i)
+        for (int i = 0; i < mChannelNum_; ++i)
         {
             mBuf_[i] = rand() % 10;
         }
@@ -41,6 +42,8 @@ private:
     QValueAxis* mAxisY_;
     QLineSeries* mLineSeries_;
     QChart* mChart_;
+
+    QList<QPointF> mData_;
 };
 
 class MainWindow : public QMainWindow
