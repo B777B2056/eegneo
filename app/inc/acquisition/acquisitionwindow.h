@@ -53,27 +53,27 @@ struct MarkerInfo
 };
 
 /* 波形绘图相关信息 */
-struct WaveDrawingInfo
-{
-    int maxVoltage = 50;
-    int timeInterval = 5;  // 波形显示的时间长度，单位为s
-    int threshold = 5000;  // 图上最多显示多少个数据点
-    ChartHelp help;  // 绘图帮助界面，存放chartview
-    std::vector<QQueue<QPointF> > pointQueue;   // 图像点队列
-    QTimer graphTimer; //图像渲染定时器
-    std::vector<QSplineSeries *> series;    // 曲线集合
-    std::vector<QDateTimeAxis *> axisX; // 横轴集合，为时间
-    std::vector<QValueAxis *> axisY;    // 纵轴集合，为电压
-    std::vector<QChart *> charts;   // 绘图板集合
-    QList<QPointF> mData;   // 数据点集合
-    std::vector<double> graphData;  // 从数据处理线程接收到的电压值
+// struct WaveDrawingInfo
+// {
+//     int maxVoltage = 50;
+//     int timeInterval = 5;  // 波形显示的时间长度，单位为s
+//     int threshold = 5000;  // 图上最多显示多少个数据点
+//     ChartHelp help;  // 绘图帮助界面，存放chartview
+//     std::vector<QQueue<QPointF> > pointQueue;   // 图像点队列
+//     QTimer graphTimer; //图像渲染定时器
+//     std::vector<QSplineSeries *> series;    // 曲线集合
+//     std::vector<QDateTimeAxis *> axisX; // 横轴集合，为时间
+//     std::vector<QValueAxis *> axisY;    // 纵轴集合，为电压
+//     std::vector<QChart *> charts;   // 绘图板集合
+//     QList<QPointF> mData;   // 数据点集合
+//     std::vector<double> graphData;  // 从数据处理线程接收到的电压值
 
-    WaveDrawingInfo()
-    {
-        //设置图像更新周期，单位：毫秒
-        graphTimer.setInterval(GRAPH_FRESH);
-    }
-};
+//     WaveDrawingInfo()
+//     {
+//         //设置图像更新周期，单位：毫秒
+//         graphTimer.setInterval(GRAPH_FRESH);
+//     }
+// };
 
 /* 电极 */
 enum class ChannelNum {EIGHT = 8, SIXTEEN = 16};

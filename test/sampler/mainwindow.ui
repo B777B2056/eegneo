@@ -20,18 +20,6 @@
       <item row="0" column="0">
        <widget class="QChartView" name="graphicsView"/>
       </item>
-      <item row="1" column="0">
-       <widget class="QChartView" name="graphicsView_2"/>
-      </item>
-      <item row="2" column="0">
-       <widget class="QChartView" name="graphicsView_3"/>
-      </item>
-      <item row="3" column="0">
-       <widget class="QChartView" name="graphicsView_4"/>
-      </item>
-      <item row="4" column="0">
-       <widget class="QChartView" name="graphicsView_5"/>
-      </item>
      </layout>
     </item>
    </layout>

@@ -1,14 +1,8 @@
 #pragma once
-#include <atomic>
-#include <array>
-#include <deque>
-#include <mutex>
-#include <shared_mutex>
-#include <thread>
 #include <fstream>
 #include <QSerialPort>
 #include <QString>
-#include <QVector>
+#include <QSharedMemory>
 
 namespace eegneo
 {
@@ -22,22 +16,31 @@ namespace eegneo
         DataSampler& operator=(DataSampler&&) = default;
         virtual ~DataSampler();
 
-        double data(std::size_t channelIdx) const;
+        void start();
 
     protected:
-        std::array<double, 16> mBuf_;
+        double* mBuf_;
         std::size_t mChannelNum_;
-        virtual void run() = 0;
+        std::fstream mRecordFile_;
+        QSharedMemory mSharedMemory_;
+
+        virtual void doSample() = 0;
+        void doRecord();
+    };
+
+    class TestDataSampler : public DataSampler
+    {
+    public:
+        using DataSampler::DataSampler;
 
     private:
-        std::atomic_bool mIsStop_;
-        mutable std::shared_mutex mReadWriteMutex_;
-        std::thread mSampleThread_; // 板子采样线程
-        std::thread mRecordThread_; // 记录数据线程（记录到文件中）
-        std::deque<std::array<double, 16>> mQueue_;
-
-        void doRecord();
-        void doSample();
+        void doSample() override 
+        {  
+            for (int i = 0; i < mChannelNum_; ++i)
+            {
+                mBuf_[i] = rand() % 10;
+            }
+        }
     };
 
     class ShanghaiDataSampler : public DataSampler
@@ -54,7 +57,7 @@ namespace eegneo
         void sendStartCmd();
         void handle();
         double turnBytes2uV(char byte1, char byte2, char byte3);
-        void run() override;
+        void doSample() override;
 
     private:
         static constexpr double MAGIC_COFF = 0.022351744455307063;

@@ -1,8 +1,11 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
+#include <array>
+#include <cstddef>
 #include <QMainWindow>
 #include <QList>
-#include "acquisition/sampler.h"
+#include <QSharedMemory>
+#include "../../app/inc/acquisition/wave_plotter.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -12,39 +15,6 @@ class QChart;
 class QValueAxis;
 class QLineSeries;
 class QTimer;
-
-class TestDataSampler : public eegneo::DataSampler
-{
-public:
-    using eegneo::DataSampler::DataSampler;
-
-private:
-    void run() override 
-    {  
-        for (int i = 0; i < mChannelNum_; ++i)
-        {
-            mBuf_[i] = rand() % 10;
-        }
-    }
-};
-
-class Chart
-{
-public:
-    Chart();
-    ~Chart();
-    void update(double val);
-    QChart* chart() { return mChart_; }
-
-private:
-    int mCntX_;
-    QValueAxis* mAxisX_;
-    QValueAxis* mAxisY_;
-    QLineSeries* mLineSeries_;
-    QChart* mChart_;
-
-    QList<QPointF> mData_;
-};
 
 class MainWindow : public QMainWindow
 {
@@ -59,8 +29,9 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    Chart mChart_[5];
+    eegneo::EEGWavePlotImpl mChart_;
     QTimer* mTimer_;
-    eegneo::DataSampler* mDataSampler_;
+    std::array<double, 8> mBuf_;
+    QSharedMemory mSharedMemory_;
 };
 #endif // MAINWINDOW_H

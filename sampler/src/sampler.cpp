@@ -1,73 +1,56 @@
-#include "acquisition/sampler.h"
+#include "sampler.h"
 #include <cstring>
 #include <QByteArray>
-
-#include <iostream>
 
 namespace eegneo
 {
     constexpr const char* RECORD_FILE_PATH = "E:/jr/eegneo/temp.txt";
 
     DataSampler::DataSampler(std::size_t channelNum)
-        : mChannelNum_(channelNum)
-        , mIsStop_{false}
-        , mSampleThread_{&DataSampler::doSample, this}
-        , mRecordThread_{&DataSampler::doRecord, this}
+        : mBuf_(new double[channelNum])
+        , mChannelNum_(channelNum)
+        , mRecordFile_{RECORD_FILE_PATH, std::ios::out}
+        , mSharedMemory_{"Sampler"}
     {
-        
+        if (!mRecordFile_.is_open())
+        {
+            // TODO: 文件创建失败，处理
+        }
+        if (mSharedMemory_.attach())
+        {
+            mSharedMemory_.detach();
+        }
+        if (!mSharedMemory_.create(mChannelNum_ * sizeof(double)))
+        {
+            
+        }
     }
 
     DataSampler::~DataSampler()
     {
-        mIsStop_.store(true);
-        if (mSampleThread_.joinable())
-        {
-            mSampleThread_.join();
-        }
-        if (mRecordThread_.joinable())
-        {
-            mRecordThread_.join();
-        }
+        delete[] mBuf_;
     }
 
-    double DataSampler::data(std::size_t channelIdx) const
+    void DataSampler::start()
     {
-        std::shared_lock<std::shared_mutex> lock(mReadWriteMutex_);
-        return mBuf_[channelIdx];
+        for (;;)
+        {
+            this->doSample();
+            this->doRecord();
+            if (!mSharedMemory_.lock()) continue;
+            ::memcpy(mSharedMemory_.data(), mBuf_, mChannelNum_ * sizeof(double));
+            if (!mSharedMemory_.unlock()) continue;
+        }
     }
 
     void DataSampler::doRecord()
     {
-        thread_local std::fstream recordFile{RECORD_FILE_PATH, std::ios::out};
-        if (!recordFile.is_open())
+        
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            // TODO: 文件创建失败，处理
+            mRecordFile_ << mBuf_[i] << " ";
         }
-        thread_local std::array<double, 16> tempBuf;
-        while (!mIsStop_.load())
-        {
-            {
-                std::shared_lock<std::shared_mutex> lock(mReadWriteMutex_);
-                while (mQueue_.empty());
-                tempBuf = mQueue_.front();
-                mQueue_.pop_front();
-            }
-            for (std::size_t i = 0; i < mChannelNum_; ++i)
-            {
-                recordFile << tempBuf[i] << ",";
-            }
-            recordFile << "\n";
-        }
-    }
-
-    void DataSampler::doSample()
-    {
-        while (!mIsStop_.load())
-        {
-            this->run();
-            std::unique_lock<std::shared_mutex> l(mReadWriteMutex_);
-            mQueue_.emplace_back(mBuf_);
-        }
+        mRecordFile_ << "\n";
     }
 
     static void SendData2SerialPort(QSerialPort& serialPort, const QByteArray& data)
@@ -93,7 +76,7 @@ namespace eegneo
         mSerialPort_.close();
     }
 
-    void ShanghaiDataSampler::run()
+    void ShanghaiDataSampler::doSample()
     {
         if (!mSerialPort_.isOpen())
         {
