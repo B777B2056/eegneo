@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1730</width>
-    <height>699</height>
+    <width>1440</width>
+    <height>702</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,7 +16,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0">
-     <layout class="QVBoxLayout" name="verticalLayout">
+     <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
@@ -289,6 +289,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QLineEdit" name="lineEdit_3">
+          <property name="maximumSize">
+           <size>
+            <width>180</width>
+            <height>21</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="pushButton_3">
           <property name="maximumSize">
            <size>
@@ -298,16 +308,6 @@
           </property>
           <property name="text">
            <string>M2</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="lineEdit_3">
-          <property name="maximumSize">
-           <size>
-            <width>180</width>
-            <height>21</height>
-           </size>
           </property>
          </widget>
         </item>
@@ -363,20 +363,21 @@
        </layout>
       </item>
       <item>
-       <widget class="QListWidget" name="listWidget">
-        <property name="minimumSize">
-         <size>
-          <width>1700</width>
-          <height>600</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100000</width>
-          <height>100000</height>
-         </size>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QChartView" name="graphicsView"/>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QChartView" name="graphicsView_2"/>
+          </item>
+          <item>
+           <widget class="QChartView" name="graphicsView_3"/>
+          </item>
+         </layout>
+        </item>
+       </layout>
       </item>
      </layout>
     </item>
@@ -387,8 +388,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1730</width>
-     <height>25</height>
+     <width>1440</width>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu">
@@ -597,6 +598,13 @@
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QChartView</class>
+   <extends>QGraphicsView</extends>
+   <header location="global">qchartview.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

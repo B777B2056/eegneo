@@ -1,5 +1,6 @@
 #include <QtCharts>
 #include <QQueue>
+#include <QString>
 
 /*全局变量(用于主线程与子线程间传递信息)*/
 int maxVoltage;
@@ -12,3 +13,12 @@ std::vector<QChart *> charts;
 std::vector<QSplineSeries *> series;
 std::vector<QQueue<QPointF>> pointQueue;
 std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>> marks;
+
+namespace eegneo
+{
+    namespace global
+    {
+        QString GSubjectNumber;
+        
+    }   // namespace global
+}   // namespace eegneo

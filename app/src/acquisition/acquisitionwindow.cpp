@@ -1,11 +1,11 @@
 ﻿#include "acquisition/acquisitionwindow.h"
+#include "ui_acquisitionwindow.h"
 #include "ui_charthelp.h"
 #include <QMessageBox>
-#include <QQueue>
-#include <QCloseEvent>
 #include <QFileDialog>
-#include <QMutex>
-#include <iostream>
+#include <QDateTime>
+#include <QSharedMemory>
+#include <QStringList>
 #include <map>
 #include <vector>
 #include <sstream>
@@ -13,7 +13,6 @@
 #include "settings/setinfo.h"
 #include "settings/setchannelname.h"
 #include "erp/p300.h"
-#include "utils/workthread.h"
 #include "settings/choosecom.h"
 
 extern "C"
@@ -28,34 +27,19 @@ extern "C"
 const static double highPassFres[7] = {0.1, 0.3, 3.5, 8.0, 12.5, 16.5, 20.5};  // 高通滤波频率选择
 const static double lowPassFres[7] = {8.0, 12.5, 16.5, 20.5, 28.0, 45.0, 50.0};  // 低通滤波频率选择
 
-ElectrodesInfo::ElectrodesInfo(WaveDrawingInfo& waveInfo)
-    : montages{waveInfo.help.ui->widget, waveInfo.help.ui->widget_2, waveInfo.help.ui->widget_3,
-               waveInfo.help.ui->widget_4, waveInfo.help.ui->widget_5, waveInfo.help.ui->widget_6,
-               waveInfo.help.ui->widget_7, waveInfo.help.ui->widget_8, waveInfo.help.ui->widget_9,
-               waveInfo.help.ui->widget_10, waveInfo.help.ui->widget_11, waveInfo.help.ui->widget_12,
-               waveInfo.help.ui->widget_13, waveInfo.help.ui->widget_14, waveInfo.help.ui->widget_15,
-               waveInfo.help.ui->widget_16}
-{
-    impTimer.setInterval(IMPEDANCE_FRESH);
-}
-
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
-    , _waveDrawingInfo()
-    , _electrodes(_waveDrawingInfo)
-    , _parent(parent)
+    , mSampleRate_(0), mChannelNum_(0)
+    , mPlotTimer_(new QTimer(this)), mSharedMemory_(nullptr), mChart_(nullptr)
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
-    // 滤波指示信号初始化：未滤波
-    ui->label_5->setText("Off");
+    ui->label_5->setText("Off");    // 滤波指示信号初始化：未滤波
+    this->setSignalSlotConnect();
 }
 
 AcquisitionWindow::~AcquisitionWindow()
 {
-    // 停止数据获取子线程
-    _dpt->quit();
-    _dpt->wait();
     // 释放内存
     std::vector<QLineSeries *> qls;
     std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
@@ -71,37 +55,16 @@ AcquisitionWindow::~AcquisitionWindow()
     {
         delete qls[i];
     }
-    for(int i = 0; i < static_cast<int>(_electrodes.channelNum); ++i)
-    {
-        delete _electrodes.impDisplay[i];
-        delete _waveDrawingInfo.series[i];
-        delete _waveDrawingInfo.axisX[i];
-        delete _waveDrawingInfo.axisY[i];
-        delete _waveDrawingInfo.charts[i];
-    }
+    delete mPlotTimer_;
+    delete mSharedMemory_;
+    delete[] mBuf_;
+    delete mChart_;
     delete ui;
-}
-
-void AcquisitionWindow::start()
-{
-    showParticipantInfoWindow();
-    showComChooseWindow();
-    setSignalSlotConnect();
-    // 绘图初始化
-    initChart();
-    // 启动定时器
-    _waveDrawingInfo.graphTimer.start();
-    _electrodes.impTimer.start();
 }
 
 void AcquisitionWindow::setSignalSlotConnect()
 {
-    // 信号与槽的链接
-    QObject::connect(this, SIGNAL(returnMain()), _parent, SLOT(covert2InitWindow()));
-    QObject::connect(this, SIGNAL(sendBasicInfo(QString, QString)), _parent, SLOT(basicInfo(QString, QString)));
-    QObject::connect(&_waveDrawingInfo.graphTimer, SIGNAL(timeout()), this, SLOT(graphFresh()));
-    QObject::connect(&_electrodes.impTimer, SIGNAL(timeout()), this, SLOT(getImpedanceFromBoard()));
-
+    // 信号与槽的链接：太尼玛恶心了，谁看谁傻逼
     QObject::connect(ui->lineEdit, SIGNAL(editingFinished()), this, SLOT(onLineEditEditingFinished()));
     QObject::connect(ui->lineEdit_2, SIGNAL(editingFinished()), this, SLOT(onLineEdit2EditingFinished()));
     QObject::connect(ui->lineEdit_3, SIGNAL(editingFinished()), this, SLOT(onLineEdit3EditingFinished()));
@@ -134,97 +97,29 @@ void AcquisitionWindow::setSignalSlotConnect()
     QObject::connect(ui->action0_1s, SIGNAL(triggered()), this, SLOT(setTime1()));
     QObject::connect(ui->action0_5s, SIGNAL(triggered()), this, SLOT(setTime5()));
     QObject::connect(ui->action0_10s, SIGNAL(triggered()), this, SLOT(setTime10()));
-    // 数据获取线程
-    QObject::connect(_dpt, SIGNAL(sendData(std::vector<double>)), this, SLOT(receiveData(std::vector<double>)));
-    QObject::connect(_dpt, SIGNAL(inFilt()), this, SLOT(setInFilt()));
-    QObject::connect(this, SIGNAL(doFilt(int, int, int)), _dpt, SLOT(startFilt(int, int, int)));
-    QObject::connect(this, SIGNAL(doRec(std::string)), _dpt, SLOT(startRec(std::string)));
-    QObject::connect(this, SIGNAL(writeEvent(std::string)), _dpt, SLOT(doEvent(std::string)));
-    QObject::connect(this, SIGNAL(doneRec()), _dpt, SLOT(stopRec()));
 }
 
 void AcquisitionWindow::showParticipantInfoWindow()
 {
     // 待用户输入基本信息
     SetInfo siw;
-ParticipantInfoRetry:
-    int rec = siw.exec();
-    int channelNum = 0;
-    siw.getInfo(_participant.participantNum, _participant.date, _participant.others, _participant.expName, channelNum, _board.type);
-    _electrodes.channelNum = static_cast<ChannelNum>(channelNum);
-    if(rec == QDialog::Accepted)
+    if(int rec = siw.exec(); QDialog::Accepted == rec)
     {
-        if(_participant.participantNum.isEmpty() || _participant.date.isEmpty() || _participant.expName.isEmpty() || (_board.type == Null))
-        {
-            // 被试信息必须项缺失，弹出错误信息后返回
-            QMessageBox::StandardButton reply;
-            reply = QMessageBox::critical(&siw, siw.tr("错误"),
-                                            "被试信息缺失\n请检查被试编号、日期与实验名称。",
-                                            QMessageBox::Retry | QMessageBox::Abort);
-            if (reply == QMessageBox::Abort)
-            {
-                siw.close();
-            }
-            else
-            {
-                goto ParticipantInfoRetry;
-            }
-        }
-    }
-    else
-    {
-        siw.close();
-    }
-    // 被试信息初始化
-    QString particInfoStr = _participant.participantNum+'_'+_participant.date+'_'+_participant.expName+'_'+_participant.others;
-    _fileInfo.tempFiles += particInfoStr.toStdString();
-    emit sendBasicInfo(_participant.participantNum, "temp files//" + particInfoStr);
-    _electrodes.impedance.assign(static_cast<int>(_electrodes.channelNum), 0);
-    _waveDrawingInfo.graphData.assign(static_cast<int>(_electrodes.channelNum), 0.0);
-    _fileInfo.channelNames.assign(static_cast<int>(_electrodes.channelNum), "");
-    _waveDrawingInfo.pointQueue.assign(static_cast<int>(_electrodes.channelNum), QQueue<QPointF>());
-    for(int i = 0; i < static_cast<int>(_electrodes.channelNum); ++i)
-    {
-        _electrodes.impDisplay.push_back(new QLabel(this));
-        _waveDrawingInfo.series.push_back(new QSplineSeries);
-        _waveDrawingInfo.axisX.push_back(new QDateTimeAxis);
-        _waveDrawingInfo.axisY.push_back(new QValueAxis);
-        _waveDrawingInfo.charts.push_back(new QChart);
-    }
-    if(_electrodes.channelNum == ChannelNum::EIGHT)
-    {
-        for(int i = 8; i < 16; i++)
-            _electrodes.montages[i]->hide();
-    }
-}
+        this->mChannelNum_ = siw.channelNum();
+        this->mSampleRate_ = siw.sampleRate();
+        this->mFileName_ = siw.subjectNum() + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
+        this->mBuf_ = new double[this->mChannelNum_];
+        this->mChart_ = new eegneo::EEGWavePlotImpl(this->mChannelNum_);
+        this->startDataSampler();
+        this->initChart();
+        this->show();
 
-void AcquisitionWindow::showComChooseWindow()
-{
-    if(_board.type == Shanxi)
-    {
-        _board.sampleRate = 1000;
-        _dpt = new DataProcessThread(static_cast<int>(_electrodes.channelNum), _board.sampleRate, _board.type);
+        this->_fileInfo.tempFiles = mFileName_.toStdString();
     }
     else
     {
-        _board.sampleRate = 250;
-        ChooseCom c;
-        QString com;
-ComRetry:
-        int rec = c.exec();
-        c.getCom(com);
-        if(rec == QDialog::Accepted){
-            if(com.isEmpty()){
-                // 被试信息必须项缺失，弹出错误信息后返回
-                QMessageBox::critical(&c, c.tr("错误"),
-                                                "请填写com口！",
-                                                QMessageBox::Retry);
-                goto ComRetry;
-            }
-        }
-        _dpt = new DataProcessThread(static_cast<int>(_electrodes.channelNum), _board.sampleRate, _board.type, com);
+        emit returnMain();
     }
-    _dpt->start();
 }
 
 // 创建缓存TXT文件
@@ -238,19 +133,16 @@ void AcquisitionWindow::createTempTXT()
     }
     _fileInfo.tempFiles = "temp files//" + _fileInfo.tempFiles;
     _fileInfo.isRec = true;
-    emit doRec(_fileInfo.tempFiles);
 }
 
-void AcquisitionWindow::setFilePath(int s, std::string& path)
+void AcquisitionWindow::setFilePath(int s, QString& path)
 {
     path = QFileDialog::getExistingDirectory(this, tr("文件保存路径选择"),
                                                  "/home",
                                                  QFileDialog::ShowDirsOnly
-                                               | QFileDialog::DontResolveSymlinks).toStdString();
-    path += ("/"+_participant.participantNum.toStdString()+'_'+_participant.date.toStdString()+'_'+_participant.others.toStdString());
-    QString q = QString::fromStdString(path);
-    q.replace("/", "\\");
-    path = q.toStdString();
+                                               | QFileDialog::DontResolveSymlinks);
+    path += ("/" + this->mFileName_);
+    path.replace("/", "\\");
     // 询问用户是否采用默认的通道名称(仅EDF可用)
     if(!s)
     {
@@ -260,12 +152,12 @@ void AcquisitionWindow::setFilePath(int s, std::string& path)
                                         QMessageBox::Ok | QMessageBox::No);
         if (reply == QMessageBox::Ok){
             // 弹窗口让用户输入各通道名称
-            SetChannelName scl(static_cast<int>(_electrodes.channelNum));
+            SetChannelName scl(mChannelNum_);
       Again:
             int rec = scl.exec();
             if(rec == QDialog::Accepted)
             {
-                for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
+                for(int i = 0; i < mChannelNum_; i++)
                 {
                     _fileInfo.channelNames[i] = scl.names[i].toStdString();
                 }
@@ -277,7 +169,7 @@ void AcquisitionWindow::setFilePath(int s, std::string& path)
         }
         else{
             // 各通道默认标签
-            for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
+            for(int i = 0; i < mChannelNum_; i++)
             {
                 _fileInfo.channelNames[i] = std::to_string(i + 1);
             }
@@ -286,12 +178,11 @@ void AcquisitionWindow::setFilePath(int s, std::string& path)
     else
     {
         // 各通道默认标签
-        for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
+        for(int i = 0; i < mChannelNum_; i++)
         {
             _fileInfo.channelNames[i] = std::to_string(i + 1);
         }
     }
-    emit sendBasicInfo(_participant.participantNum, _participant.participantNum+'_'+_participant.date+'_'+_participant.expName+'_'+_participant.others);
 }
 
 void AcquisitionWindow::saveEdfPlus()
@@ -305,32 +196,36 @@ void AcquisitionWindow::saveEdfPlus()
     }
     _fileInfo.isFinish = 0;
     int i, col = 0;
-    std::string edf_path;
+    QString edf_path;
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ifstream events_read;  // 标记缓存txt文件输入流
-    double *buf_persec = new double[static_cast<int>(_electrodes.channelNum) * _board.sampleRate];
-    std::string file_name = _participant.participantNum.toStdString()+'_'+_participant.date.toStdString()+'_'+_participant.others.toStdString();
+    double *buf_persec = new double[mChannelNum_ * mSampleRate_];
+    std::string file_name = this->mFileName_.toStdString();
     setFilePath(0, edf_path);
     // 新建文件夹
     QDir dir;
-    if (!dir.exists(QString::fromStdString(edf_path)))
+    if (!dir.exists(edf_path))
     {
-        dir.mkpath(QString::fromStdString(edf_path));
+        dir.mkpath(edf_path);
 
     }
     // 设置EDF文件参数
-    _fileInfo.flag = ::edfopen_file_writeonly((edf_path + "\\" + file_name + ".edf").c_str(), EDFLIB_FILETYPE_EDFPLUS,
-                                              static_cast<int>(_electrodes.channelNum));
-    for(i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
+    {
+        std::string edf_path_temp = edf_path.toStdString();
+        _fileInfo.flag = ::edfopen_file_writeonly((edf_path_temp + "\\" + file_name + ".edf").c_str(), 
+                                                EDFLIB_FILETYPE_EDFPLUS,
+                                                static_cast<int>(mChannelNum_));
+    }
+    for(i = 0; i < mChannelNum_; i++)
     {
         // 设置各通道采样率
-        ::edf_set_samplefrequency(_fileInfo.flag, i, _board.sampleRate);
+        ::edf_set_samplefrequency(_fileInfo.flag, i, static_cast<int>(mSampleRate_));
         // 设置信号最大与最小数字值(EDF为16位文件，一般设置为-32768~32767)
         ::edf_set_digital_maximum(_fileInfo.flag, i, 32767);
         ::edf_set_digital_minimum(_fileInfo.flag, i, -32768);
         // 设置信号最大与最小物理值(即信号在物理度量上的最大、最小值)
-        ::edf_set_physical_maximum(_fileInfo.flag, i, _waveDrawingInfo.maxVoltage);
-        ::edf_set_physical_minimum(_fileInfo.flag, i, -_waveDrawingInfo.maxVoltage);
+        // ::edf_set_physical_maximum(_fileInfo.flag, i, _waveDrawingInfo.maxVoltage);
+        // ::edf_set_physical_minimum(_fileInfo.flag, i, -_waveDrawingInfo.maxVoltage);
         // 设置各通道数据的单位
         ::edf_set_physical_dimension(_fileInfo.flag, i, "uV");
         // 设置各通道名称
@@ -347,13 +242,13 @@ void AcquisitionWindow::saveEdfPlus()
             std::string str;
             std::getline(samples_read, str);
             std::stringstream ss(str);
-            for(int row = 0; row < _board.sampleRate; row++)
+            for(int row = 0; row < mSampleRate_; row++)
             {
-              if(_board.sampleRate * row + col < static_cast<int>(_electrodes.channelNum) * _board.sampleRate)
-                  ss >> buf_persec[_board.sampleRate * row + col];
+              if(mSampleRate_ * row + col < mChannelNum_ * mSampleRate_)
+                  ss >> buf_persec[mSampleRate_ * row + col];
             }
             /*1s结束*/
-            if(!((col) % _board.sampleRate))
+            if(!((col) % mSampleRate_))
             {
                 edf_blockwrite_physical_samples(_fileInfo.flag, buf_persec);
                 col = 0;
@@ -362,11 +257,11 @@ void AcquisitionWindow::saveEdfPlus()
         ++col;
     }
     // 写入多余的空数据以保证标记存在
-    for(i = 0; i < static_cast<int>(_electrodes.channelNum) * _board.sampleRate; i++)
+    for(i = 0; i < mChannelNum_ * mSampleRate_; i++)
     {
        buf_persec[i] = 0.0;
     }
-    for(i = 0; i < _fileInfo.eventCount - _fileInfo.curLine / _board.sampleRate + 1; i++)
+    for(i = 0; i < _fileInfo.eventCount - _fileInfo.curLine / mSampleRate_ + 1; i++)
     {
         ::edf_blockwrite_physical_samples(_fileInfo.flag, buf_persec);
     }
@@ -389,7 +284,7 @@ void AcquisitionWindow::saveEdfPlus()
     // 保存行为学数据
     if(_fileInfo.isSaveP300BH)
     {
-        saveBehavioralP300(edf_path);
+        saveBehavioralP300(edf_path.toStdString());
     }
     // EDF文件写入完成
     _fileInfo.isFinish = 1;
@@ -406,8 +301,8 @@ void AcquisitionWindow::saveTxt()
         return;
     }
     _fileInfo.isFinish = 0;
-    std::string txt_path;
-    std::string file_name = _participant.participantNum.toStdString()+'_'+_participant.date.toStdString()+'_'+_participant.others.toStdString();
+    QString txt_path;
+    std::string file_name = this->mFileName_.toStdString();
     std::ifstream samples_read;  // 8通道缓存txt文件输入流
     std::ofstream samples_txt;  // 数据点txt文件输出流
     std::ifstream events_read;
@@ -415,20 +310,19 @@ void AcquisitionWindow::saveTxt()
     std::ofstream events_txt_brainstorm;  // brainstorm风格
     setFilePath(1, txt_path);
     // 新建文件夹，把三个txt放入一个文件夹
-    QDir dir;
-    if (!dir.exists(QString::fromStdString(txt_path)))
+    if (QDir dir; !dir.exists(txt_path))
     {
-        dir.mkpath(QString::fromStdString(txt_path));
+        dir.mkpath(txt_path);
     }
     // 写入数据点
     int col = 0;
-    samples_txt.open(txt_path + "\\" + file_name + "_samples.txt");
+    samples_txt.open((txt_path.toStdString() + "\\" + file_name + "_samples.txt"));
     samples_txt.close();
     samples_read.open(_fileInfo.tempFiles + "_samples.txt");
-    samples_txt.open(txt_path + "\\" + file_name + "_samples.txt", std::ios::app);
-    for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
+    samples_txt.open((txt_path.toStdString() + "\\" + file_name + "_samples.txt"), std::ios::app);
+    for(int i = 0; i < mChannelNum_; i++)
     {
-        if(i < static_cast<int>(_electrodes.channelNum) - 1)
+        if(i < mChannelNum_ - 1)
         {
             samples_txt << _fileInfo.channelNames[i] << " ";
         }
@@ -451,10 +345,10 @@ void AcquisitionWindow::saveTxt()
     samples_read.close();
     // 写入事件(EEGLAB风格)
     col = 0;
-    events_txt_eeglab.open(txt_path + "\\" + file_name + "_events(eeglab).txt");
+    events_txt_eeglab.open((txt_path.toStdString() + "\\" + file_name + "_events(eeglab).txt"));
     events_txt_eeglab.close();
     events_read.open(_fileInfo.tempFiles + "_events.txt");
-    events_txt_eeglab.open(txt_path + "\\" + file_name + "_events(eeglab).txt", std::ios::app);
+    events_txt_eeglab.open((txt_path.toStdString() + "\\" + file_name + "_events(eeglab).txt"), std::ios::app);
     while(events_read.peek() != EOF)
     {
         std::string str;
@@ -477,10 +371,10 @@ void AcquisitionWindow::saveTxt()
     events_read.close();
     // 写入事件(Brainstorm风格)
     col = 0;
-    events_txt_brainstorm.open(txt_path + "\\" + file_name + "_events(brainstorm).txt");
+    events_txt_brainstorm.open((txt_path.toStdString() + "\\" + file_name + "_events(brainstorm).txt"));
     events_txt_brainstorm.close();
     events_read.open(_fileInfo.tempFiles + "_events.txt");
-    events_txt_brainstorm.open(txt_path + "\\" + file_name + "_events(brainstorm).txt", std::ios::app);
+    events_txt_brainstorm.open((txt_path.toStdString() + "\\" + file_name + "_events(brainstorm).txt"), std::ios::app);
     while(events_read.peek() != EOF)
     {
         std::string str;
@@ -499,11 +393,11 @@ void AcquisitionWindow::saveTxt()
     events_read.close();
     // 写描述性文件文件
     std::ofstream readme;
-    readme.open(txt_path + "\\" + file_name + "_readme.txt");
+    readme.open(txt_path.toStdString() + "\\" + file_name + "_readme.txt");
     readme.close();
-    readme.open(txt_path + "\\" + file_name + "_readme.txt", std::ios::app);
-    readme << "Data sampling rate: " << _board.sampleRate << std::endl;
-    readme << "Number of channels: " << static_cast<int>(_electrodes.channelNum) << std::endl;
+    readme.open(txt_path.toStdString() + "\\" + file_name + "_readme.txt", std::ios::app);
+    readme << "Data sampling rate: " << mSampleRate_ << std::endl;
+    readme << "Number of channels: " << mChannelNum_ << std::endl;
     readme << "Input field(column) names: latency type" << std::endl;
     readme << "Number of file header lines: 1" << std::endl;
     readme << "Time unit(sec): 1" << std::endl;
@@ -511,7 +405,7 @@ void AcquisitionWindow::saveTxt()
     // 保存行为学数据
     if(_fileInfo.isSaveP300BH)
     {
-        saveBehavioralP300(txt_path);
+        saveBehavioralP300(txt_path.toStdString());
     }
     _fileInfo.isFinish = 1;
 }
@@ -587,19 +481,19 @@ void AcquisitionWindow::saveBehavioralP300(std::string path)
         }
     }
     events_read.close();
-    std::string file_name = _participant.participantNum.toStdString()+'_'+_participant.date.toStdString()+'_'+_participant.others.toStdString();
+    std::string file_name = this->mFileName_.toStdString();
     std::ofstream beh_file;
     beh_file.open(path + "\\" + file_name + "_behavioral.csv");
     beh_file.close();
     beh_file.open(path + "\\" + file_name + "_behavioral.csv", std::ios::app);
-    beh_file << "Experiment Name: " << _participant.expName.toStdString()
+    beh_file << "Experiment Name: " << "NO NAME SETED"
              << ", Date: " << QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss").toStdString()
              << std::endl;
     beh_file << "Subject,Trial,blank.ACC,blank.CRESP,blank.OnsetTime,blank.RESP,blank.RT,blank.RTTime,code,correct,pic" << std::endl;
     // 预实验
     for(int i = 0; i < 40; i++)
     {
-        std::string pre_exp = _participant.participantNum.toStdString() + "," + std::to_string(i + 1);
+        std::string pre_exp = this->mFileName_.toStdString() + "," + std::to_string(i + 1);
         for(int j = 0; j < 9; j++)
         {
             pre_exp += ",";
@@ -610,7 +504,7 @@ void AcquisitionWindow::saveBehavioralP300(std::string path)
     for(int i = 0; i < _p300OddballImgNum; i++)
     {
         //Subject
-        beh_file << _participant.participantNum.toStdString();
+        beh_file << this->mFileName_.toStdString();
         beh_file << ",";
         //Trial
         beh_file << std::to_string(i + 1);
@@ -668,11 +562,11 @@ void AcquisitionWindow::createMark(std::string event)
     splinePen.setBrush(Qt::red);
     splinePen.setColor(Qt::red);
     line->setPen(splinePen);
-    _waveDrawingInfo.charts[0]->addSeries(line);
-    _waveDrawingInfo.charts[0]->setAxisX(_waveDrawingInfo.axisX[0], line);
-    _waveDrawingInfo.charts[0]->setAxisY(_waveDrawingInfo.axisY[0], line);
+    // _waveDrawingInfo.charts[0]->addSeries(line);
+    // _waveDrawingInfo.charts[0]->setAxisX(_waveDrawingInfo.axisX[0], line);
+    // _waveDrawingInfo.charts[0]->setAxisY(_waveDrawingInfo.axisY[0], line);
     // 添加marker文字注释
-    QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(_waveDrawingInfo.charts[0]);
+    QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(mChart_->chart());
     pItem->setText(QString::fromStdString(event) + "\n" + QDateTime::currentDateTime().toString("hh:mm:ss"));
     _markerInfo.marks[line] = std::make_pair(QDateTime::currentDateTime().toMSecsSinceEpoch(), pItem);
     // 将marker写入文件
@@ -683,127 +577,61 @@ void AcquisitionWindow::createMark(std::string event)
     }
 }
 
+void AcquisitionWindow::startDataSampler()
+{
+    QStringList args;
+    args << QString::number(mChannelNum_);
+    mDataSampler_.start("E:/jr/eegneo/build/sampler/Debug/eegneo_sampler.exe", args);
+    if (mDataSampler_.waitForStarted(-1))
+    {
+        mSharedMemory_ = new QSharedMemory{"Sampler"};
+        while (!mSharedMemory_->attach())
+        {
+
+        }
+    }
+}
+
+void AcquisitionWindow::lineEditHelper(int N)
+{
+    std::array<decltype (ui->lineEdit), 4> lineEditUi = {ui->lineEdit, ui->lineEdit_2, ui->lineEdit_3, ui->lineEdit_4};
+    if(!lineEditUi[N]->text().isEmpty())
+    {
+        _markerInfo.markerNames[N] = lineEditUi[N]->text().toStdString();
+    }
+}
+
 void AcquisitionWindow::initChart()
 {
-    for(int index = 0; index < static_cast<int>(_electrodes.channelNum); index++)
-    {
-        // 设置x轴
-        _waveDrawingInfo.axisX[index]->setRange(QDateTime::currentDateTime().addSecs(-_waveDrawingInfo.timeInterval), QDateTime::currentDateTime());
-        _waveDrawingInfo.axisX[index]->setTickCount(5);
-        _waveDrawingInfo.axisX[index]->setFormat("hh:mm:ss");
-        _waveDrawingInfo.charts[index]->addAxis(_waveDrawingInfo.axisX[index], Qt::AlignBottom);
-        // 设置y轴
-        _waveDrawingInfo.axisY[index]->setRange(-50, 50);
-        _waveDrawingInfo.axisY[index]->setTickCount(3);
-        _waveDrawingInfo.axisY[index]->setTitleText("uV");
-        _waveDrawingInfo.axisY[index]->setLabelFormat("%d");
-        _waveDrawingInfo.charts[index]->addAxis(_waveDrawingInfo.axisY[index], Qt::AlignLeft);
-        // 链接数据
-        _waveDrawingInfo.series[index]->setUseOpenGL(true);
-        _waveDrawingInfo.series[index]->append(QPointF(0, 0));
-        _waveDrawingInfo.charts[index]->addSeries(_waveDrawingInfo.series[index]);
-        QPen splinePen;
-        splinePen.setBrush(Qt::blue);
-        splinePen.setColor(Qt::blue);
-        _waveDrawingInfo.series[index]->setPen(splinePen);
-        // 设置界面显示
-        _waveDrawingInfo.charts[index]->setAxisX(_waveDrawingInfo.axisX[index], _waveDrawingInfo.series[index]);
-        _waveDrawingInfo.charts[index]->setAxisY(_waveDrawingInfo.axisY[index], _waveDrawingInfo.series[index]);
-        _waveDrawingInfo.charts[index]->legend()->hide();
-        _waveDrawingInfo.charts[index]->setTheme(QChart::ChartThemeLight);
-        _waveDrawingInfo.charts[index]->setMargins({-10, 0, 0, -10});
-        _waveDrawingInfo.charts[index]->axisX()->setGridLineVisible(false);
-        _waveDrawingInfo.charts[index]->axisY()->setGridLineVisible(false);
-        _electrodes.montages[index]->setChart(_waveDrawingInfo.charts[index]);
-        _electrodes.impDisplay[index]->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-        _electrodes.impDisplay[index]->setMinimumSize(QSize(75, 75));
-        QLabel *num = new QLabel(this);
-        num->setText(QString::number(index + 1));
-        num->setMinimumSize(QSize(15, 15));
-        num->setMaximumSize(QSize(20, 20));
-        QWidget *widget = new QWidget(ui->listWidget);
-        QHBoxLayout *horLayout = new QHBoxLayout;
-        horLayout->setContentsMargins(0, 0, 0, 0);
-        horLayout->setMargin(0);
-        horLayout->setSpacing(0);
-        horLayout->addWidget(num);
-        horLayout->addWidget(_electrodes.montages[index]);
-        horLayout->addWidget(_electrodes.impDisplay[index]);
-        widget->setLayout(horLayout);
-        QListWidgetItem* item = new QListWidgetItem(ui->listWidget);
-        item->setSizeHint(QSize(1700, 120));
-        ui->listWidget->setItemWidget(item, widget);
-    }
+    ui->graphicsView->setChart(mChart_->chart());                                   
+    // ui->graphicsView->setRenderHint(QPainter::Antialiasing);  
+
+    mChart_->setAxisXScale(eegneo::Second::FIVE);
+    mChart_->setAxisYScale(0, 10 * mChannelNum_);
+
+    QObject::connect(mPlotTimer_, SIGNAL(timeout()), this, SLOT(graphFresh()));
+    mPlotTimer_->start(GRAPH_FRESH);
 }
 
 // 波形更新
 void AcquisitionWindow::updateWave()
 {
-    for(int index = 0; index < static_cast<int>(_electrodes.channelNum); index++)
-    {
-        // 坐标轴刷新
-        _waveDrawingInfo.charts[index]->axisX()->setRange(QDateTime::currentDateTime().addSecs(-_waveDrawingInfo.timeInterval),
-                                                          QDateTime::currentDateTime());
-        // 数据点刷新
-        if(_waveDrawingInfo.pointQueue[index].size() >= _waveDrawingInfo.threshold)
-        {
-            _waveDrawingInfo.pointQueue[index].dequeue();
-        }
-        _waveDrawingInfo.pointQueue[index].enqueue(QPointF(QDateTime::currentDateTime().toMSecsSinceEpoch(),
-                                                           _waveDrawingInfo.graphData[index]));
-        _waveDrawingInfo.series[index]->replace(_waveDrawingInfo.pointQueue[index]);
-    }
-}
+    if (!mSharedMemory_->lock()) return;
+    ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
+    if (!mSharedMemory_->unlock()) return;
 
-void AcquisitionWindow::getImpedanceFromBoard()
-{
-    for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
-    {
-    #ifdef NO_BOARD
-        _electrodes.impedance[i] = 500.0 * rand() / (RAND_MAX);
-    #endif
-        if(_electrodes.impedance[i] >= 490)
-            _electrodes.impedance[i] = -1;  // 阻抗无穷大
-    }
-    // 阻抗刷新
-    for(int i = 0; i < static_cast<int>(_electrodes.channelNum); i++)
-    {
-        BackgroundColor color;  // 背景色（0-20绿色，20-100黄色，100以上红色）
-        QString text;
-        if(_electrodes.impedance[i] < 0)
-        {
-            text = "Inf";
-            color = Red;
-        }
-        else
-        {
-            text = QString::number(_electrodes.impedance[i]) + "KOhm";
-            if(_electrodes.impedance[i] <= 20)
-                color = Green;
-            else if(_electrodes.impedance[i] > 20 && _electrodes.impedance[i] <= 100)
-                color = Yellow;
-            else
-                color = Red;
-        }
-        _electrodes.impDisplay[i]->setText(text);
-        if(color == Green)
-            _electrodes.impDisplay[i]->setStyleSheet("QLabel{background:#00FF00;}");
-        else if(color == Yellow)
-            _electrodes.impDisplay[i]->setStyleSheet("QLabel{background:#DAA520;}");
-        else
-            _electrodes.impDisplay[i]->setStyleSheet("QLabel{background:#FF0000;}");
-    }
+    mChart_->update(mBuf_);
 }
 
 // 数据获取
-void AcquisitionWindow::receiveData(std::vector<double> vec)
-{
-    _waveDrawingInfo.graphData = vec;
-    if(_fileInfo.isRec)
-    {
-        _fileInfo.curLine++;
-    }
-}
+// void AcquisitionWindow::receiveData(std::vector<double> vec)
+// {
+//     _waveDrawingInfo.graphData = vec;
+//     if(_fileInfo.isRec)
+//     {
+//         _fileInfo.curLine++;
+//     }
+// }
 
 // 图像刷新
 void AcquisitionWindow::graphFresh()
@@ -815,11 +643,11 @@ void AcquisitionWindow::graphFresh()
     for(iter = _markerInfo.marks.begin(); iter != _markerInfo.marks.end(); iter++)
     {
         QList<QPointF> marker_point;
-        marker_point.append(QPointF((iter->second).first, -_waveDrawingInfo.maxVoltage));
-        marker_point.append(QPointF((iter->second).first, _waveDrawingInfo.maxVoltage));
+        marker_point.append(QPointF((iter->second).first, 0));
+        marker_point.append(QPointF((iter->second).first, 80));
         iter->first->replace(marker_point);
         // 文字标记
-        (iter->second).second->setPos(_waveDrawingInfo.charts[0]->mapToPosition(QPointF((iter->second).first, 50.0), iter->first));
+        (iter->second).second->setPos(mChart_->chart()->mapToPosition(QPointF((iter->second).first, 50.0), iter->first));
     }
 }
 
@@ -859,6 +687,7 @@ void AcquisitionWindow::onPushButtonClicked()
     else
     {
         /*返回开始界面*/
+        this->hide();
         emit returnMain();
     }
 }
@@ -898,7 +727,7 @@ void AcquisitionWindow::onFilterClicked()
             QMessageBox::critical(this, tr("错误"), "滤波频率错误", QMessageBox::Ok);
             return;
         }
-        emit doFilt(_filtParam.lowCut, _filtParam.highCut, _filtParam.notchCut);
+        // emit doFilt(_filtParam.lowCut, _filtParam.highCut, _filtParam.notchCut);
     }
 }
 

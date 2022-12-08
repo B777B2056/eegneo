@@ -12,7 +12,7 @@ P300Oddball::P300Oddball(QWidget *parent)
 {
     ui->setupUi(this);
     QPalette palette(this->palette());
-    palette.setColor(QPalette::Background, Qt::black);
+    palette.setColor(QPalette::Window, Qt::black);
     setPalette(palette);
     // 显示实验参数设置对话框
     QMessageBox::StandardButton reply;
@@ -123,43 +123,43 @@ void P300Oddball::mousePressEvent(QMouseEvent *event)
 
 void P300Oddball::playImages(int imgNum)
 {
-    QTime cross_duration, num_duration, blank_duration;
-    // 十字准星显示周期（默认）：800ms
-    cross_duration.start();
-    ui->label->setVisible(true);
-    ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/cross.png"));
-    while(cross_duration.elapsed() < crossDurationTime)
-    {
-        QCoreApplication::processEvents();
-    }
-    // 数字显示周期（默认）：50ms
-    num_duration.start();
-    // 产生随机数
-    int n = std::rand() % imgNum;
-    if(n < (int)(imgNum * freq_2) && cnt_2 < (int)(imgNum * freq_2))
-    {
-        ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/2.bmp"));
-        if(!isTrain)
-            emit sendMark("2");
-        cnt_2++;
-    }
-    else
-    {
-        ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/8.bmp"));
-        if(!isTrain)
-            emit sendMark("8");
-    }
-    while(num_duration.elapsed() < numDurationTime)
-    {
-        QCoreApplication::processEvents();
-    }
-    // 空白周期（默认）：1000ms-1200ms
-    ui->label->setVisible(false);
-    blank_duration.start();
-    while(blank_duration.elapsed() < (blankDurationTimeDown + rand() % (blankDurationTimeUp - blankDurationTimeDown)))
-    {
-        QCoreApplication::processEvents();
-    }
+    // QTime cross_duration, num_duration, blank_duration;
+    // // 十字准星显示周期（默认）：800ms
+    // cross_duration.start();
+    // ui->label->setVisible(true);
+    // ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/cross.png"));
+    // while(cross_duration.elapsed() < crossDurationTime)
+    // {
+    //     QCoreApplication::processEvents();
+    // }
+    // // 数字显示周期（默认）：50ms
+    // num_duration.start();
+    // // 产生随机数
+    // int n = std::rand() % imgNum;
+    // if(n < (int)(imgNum * freq_2) && cnt_2 < (int)(imgNum * freq_2))
+    // {
+    //     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/2.bmp"));
+    //     if(!isTrain)
+    //         emit sendMark("2");
+    //     cnt_2++;
+    // }
+    // else
+    // {
+    //     ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/8.bmp"));
+    //     if(!isTrain)
+    //         emit sendMark("8");
+    // }
+    // while(num_duration.elapsed() < numDurationTime)
+    // {
+    //     QCoreApplication::processEvents();
+    // }
+    // // 空白周期（默认）：1000ms-1200ms
+    // ui->label->setVisible(false);
+    // blank_duration.start();
+    // while(blank_duration.elapsed() < (blankDurationTimeDown + rand() % (blankDurationTimeUp - blankDurationTimeDown)))
+    // {
+    //     QCoreApplication::processEvents();
+    // }
 }
 
 void P300Oddball::stopTrain()

@@ -103,7 +103,6 @@ private:
     QValueAxis *axisX;
     QCategoryAxis *axisY;
     QChart *chart;
-    PyObject *pModule, *pFun, *arg, *error, *list;
     std::map<int, std::vector<QPointF>> samplePoints;  // 数据点
     std::map<std::string, QColor> markColors;  // 不同的mark直线对应的颜色
     std::vector<std::pair<std::string, double>> eventLines;  // 事件直线

@@ -3,7 +3,6 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , participantNum(""), tempFiles("")
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
@@ -13,18 +12,12 @@ MainWindow::MainWindow(QWidget *parent)
     QPalette palette(this->palette());
     palette.setColor(QPalette::Window, Qt::white);
     this->setPalette(palette);
+    this->setWindowTitle("精神疾病患者EEG信号采集平台@被试编号");
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-}
-
-void MainWindow::basicInfo(QString participantNum, QString tempFiles)
-{
-    this->participantNum = participantNum;
-    this->tempFiles = tempFiles;
-    this->setWindowTitle("EEG信号采集平台@被试编号：" + participantNum);
 }
 
 void MainWindow::covert2AccquisitionImpl()
@@ -37,4 +30,9 @@ void MainWindow::covert2AnalysisImpl()
 {
     this->hide();
     emit covert2Analysis();
+}
+
+void MainWindow::covert2InitWindowImpl()
+{
+    this->show();
 }

@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include <cmath>
+#include <QtMath>
 #include <cassert>
 
 /* 汉明窗函数计算 */

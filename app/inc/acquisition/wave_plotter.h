@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <QChart>
-#include <QDateTimeAxis>
 #include <QValueAxis>
 #include <QLineSeries>
 #include <QList>
@@ -36,7 +35,7 @@ namespace eegneo
         std::size_t mChannelNum_;
         Second mXRange_;
         qreal mYMin_, mYMax_;
-        QDateTimeAxis mAxisX_;
+        QValueAxis mAxisX_;
         QValueAxis mAxisY_;
         QLineSeries* mLineSeries_;
         QChart mChart_;

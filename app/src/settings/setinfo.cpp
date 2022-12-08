@@ -1,9 +1,10 @@
 ﻿#include "settings/setinfo.h"
 #include "ui_setinfo.h"
 
-SetInfo::SetInfo(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::set_info)
+SetInfo::SetInfo(QWidget *parent)
+    : QDialog(parent)
+    , mSubjectNum_(""), mChannelNum_(0), mSampleRate_(0)
+    , ui(new Ui::set_info)
 {
     ui->setupUi(this);
 }
@@ -13,52 +14,22 @@ SetInfo::~SetInfo()
     delete ui;
 }
 
-void SetInfo::getInfo(QString& num_info, QString& date_info, QString& other_info, QString& exp_name, int& motange_num, BoardType& b)
-{
-    num_info = this->num_info;
-    date_info = this->date_info;
-    other_info = this->other_info;
-    exp_name = this->exp_name;
-    motange_num = this->motange_num;
-    b = this->btype;
-}
-
 void SetInfo::on_num_editingFinished()
 {
-    num_info = ui->num->text();
-}
-
-void SetInfo::on_date_editingFinished()
-{
-    date_info = ui->date->text();
-}
-
-void SetInfo::on_others_editingFinished()
-{
-    other_info = ui->others->text();
-}
-
-void SetInfo::on_exp_name_editingFinished()
-{
-    exp_name = ui->exp_name->text();
+    this->mSubjectNum_ = ui->num->text();
 }
 
 void SetInfo::on_comboBox_currentIndexChanged(int index)
 {
-    motange_num = index * 8;
+    if (1 == index) this->mChannelNum_ = 8LL;
+    else if (2 == index) this->mChannelNum_ = 16LL;
+    else this->mChannelNum_ = 32LL;
 }
 
 void SetInfo::on_comboBox_2_currentIndexChanged(int index)
 {
-    switch(index){
-        case 1:
-            btype = Shanxi;
-            break;
-        case 2:
-            btype = Shanghai;
-            break;
-        default:
-            btype = Null;
-            break;
-    }
+    if (1 == index) this->mSampleRate_ = 128LL;
+    else if (2 == index) this->mSampleRate_ = 256LL;
+    else if (3 == index) this->mSampleRate_ = 512LL;
+    else this->mSampleRate_ = 1024LL;
 }

@@ -3,6 +3,7 @@
 #include <QSerialPort>
 #include <QString>
 #include <QSharedMemory>
+#include <QUdpSocket>
 
 namespace eegneo
 {
@@ -21,26 +22,25 @@ namespace eegneo
     protected:
         double* mBuf_;
         std::size_t mChannelNum_;
+        virtual void doSample() = 0;
+
+    private:
         std::fstream mRecordFile_;
         QSharedMemory mSharedMemory_;
-
-        virtual void doSample() = 0;
         void doRecord();
     };
 
     class TestDataSampler : public DataSampler
     {
     public:
-        using DataSampler::DataSampler;
+        TestDataSampler(std::size_t channelNum);
+        ~TestDataSampler() = default;
 
     private:
-        void doSample() override 
-        {  
-            for (int i = 0; i < mChannelNum_; ++i)
-            {
-                mBuf_[i] = rand() % 10;
-            }
-        }
+        // std::fstream mDataFile_;
+        void doSample() override;
+
+        const char* DATA_FILE_PATH = "";
     };
 
     class ShanghaiDataSampler : public DataSampler
@@ -61,5 +61,17 @@ namespace eegneo
 
     private:
         static constexpr double MAGIC_COFF = 0.022351744455307063;
+    };
+
+    class ShanxiDataSampler : public DataSampler
+    {
+    public:
+        ShanxiDataSampler(std::size_t channelNum);
+        ~ShanxiDataSampler() = default;
+
+    private:
+        QUdpSocket client;
+        double turnBytes2uV(unsigned char *bytes);
+        void doSample() override;
     };
 }   // namespace eegneo

@@ -24,6 +24,10 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+signals:
+    void covert2Accquisition();
+    void covert2Analysis();
+
 private slots:
     void update();
 

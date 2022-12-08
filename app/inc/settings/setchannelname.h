@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <QDialog>
 
 namespace Ui {
@@ -10,7 +11,7 @@ class SetChannelName : public QDialog
     Q_OBJECT
 
 public:
-    explicit SetChannelName(int channelNum, QWidget *parent = nullptr);
+    explicit SetChannelName(std::size_t channelNum, QWidget *parent = nullptr);
     ~SetChannelName();
 
     QString *names;

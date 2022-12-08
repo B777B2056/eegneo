@@ -1,7 +1,7 @@
 #include "settings/setchannelname.h"
 #include "ui_setchannelname.h"
 
-SetChannelName::SetChannelName(int channelNum, QWidget *parent) :
+SetChannelName::SetChannelName(std::size_t channelNum, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::setchannelname)
 {

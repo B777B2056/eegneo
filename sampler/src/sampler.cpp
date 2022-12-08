@@ -45,12 +45,29 @@ namespace eegneo
 
     void DataSampler::doRecord()
     {
-        
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
             mRecordFile_ << mBuf_[i] << " ";
         }
         mRecordFile_ << "\n";
+    }
+
+    TestDataSampler::TestDataSampler(std::size_t channelNum)
+        : DataSampler(channelNum)
+        // , mDataFile_{DATA_FILE_PATH, std::ios::in}
+    {
+        // if (!mDataFile_.is_open())
+        // {
+        //     throw "Data file not open!";
+        // }
+    }
+
+    void TestDataSampler::doSample()
+    {
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mBuf_[i] = rand() % 10;
+        }
     }
 
     static void SendData2SerialPort(QSerialPort& serialPort, const QByteArray& data)
@@ -157,20 +174,6 @@ namespace eegneo
                 if(cur_channel == 8)
                 {
                     cur_channel = 0;
-                    /* TODO: 滤波 */ 
-                    // if(isRec)
-                    // {
-                    //     for(int si = 0; si < channels_num; si++)
-                    //     {
-                    //         /*写入缓存txt文件*/
-                    //         if(si < this->channels_num - 1)
-                    //             samplesWrite << data[si] << " ";
-                    //         else
-                    //             samplesWrite << data[si] << std::endl;
-                    //     }
-                    //     ++cnt;
-                    // }
-                    // processData();
                 }
                 if(!((state_machine - 3) % 3) && (state_machine > 3))
                 {
@@ -195,5 +198,88 @@ namespace eegneo
     {
         int target = ((int)byte1 << 16) + (((int)byte2 << 8) & 0x0000ffff) + ((int)byte3 & 0x000000ff);
         return (double)target * MAGIC_COFF;
+    }
+
+    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
+        : DataSampler(channelNum)
+    {
+        client.bind(QHostAddress::LocalHost, 4000);
+    }
+
+    void ShanxiDataSampler::doSample()
+    {
+        while(!client.hasPendingDatagrams());
+        char bytes[72];
+        int size = client.readDatagram(bytes, 72);
+        for(int i = 0; i < size; i++)
+        {
+            if((i < size - 1)
+                    && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
+            {
+                if((i < size - 71)
+                        && (bytes[i + 66] == (char)0x00) && (bytes[i + 67] == (char)0x00)
+                        && (bytes[i + 68] == (char)0x00) && (bytes[i + 69] == (char)0x00)
+                        && (bytes[i + 70] == (char)0x00) && (bytes[i + 71] == (char)0x00))
+                {
+                    int curChannel = 0;
+                    for(int offset = 2; offset < 66; offset += 8)
+                    {
+                        unsigned char chs[8] = {
+                                                (unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
+                                                (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
+                                                (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
+                                                (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]
+                                                };
+                        mBuf_[curChannel++] = turnBytes2uV(chs);
+                    }
+                    i += 39;
+                }
+            }
+        }
+    }
+
+    double ShanxiDataSampler::turnBytes2uV(unsigned char *bytes)
+    {
+        int i, exponent;
+        unsigned int sign;
+        unsigned long long mantissa;
+        double curNum = 0.0;
+        std::string str = "";
+        sign = (bytes[7] & 0x80) >> 7;
+        exponent = (static_cast<unsigned int>(bytes[7] & 0x7f) << 4) + (static_cast<unsigned int>(bytes[6] & 0xf0) >> 4) - 1023;
+        mantissa = (static_cast<unsigned long long>(bytes[6] & 0x0f) << 48)
+                + (static_cast<unsigned long long>(bytes[5]) << 40)
+                + (static_cast<unsigned long long>(bytes[4]) << 32)
+                + (static_cast<unsigned long long>(bytes[3]) << 24)
+                + (static_cast<unsigned long long>(bytes[2]) << 16)
+                + (static_cast<unsigned long long>(bytes[1]) << 8)
+                + (static_cast<unsigned long long>(bytes[0]));
+        while(mantissa)
+        {
+            str += ('0' + mantissa % 2);
+            mantissa /= 2;
+        }
+        while(str.length() < 52)
+            str += '0';
+        str += '1';
+        if(exponent >= 0)
+        {
+            for(i = 0; i < (int)str.length(); i++)
+            {
+                if((int)i <= exponent)
+                    curNum += ((str[str.length() - i - 1] - '0') * pow(2, exponent - i));
+                else
+                    curNum += ((str[str.length() - i - 1] - '0') * (1.0 / pow(2, i - exponent)));
+            }
+        }
+        else
+        {
+            for(i = 0; i < -exponent - 1; i++)
+                str += '0';
+            for(i = 0; i < (int)str.length(); i++)
+                curNum += ((str[str.length() - i - 1] - '0') * pow(2, -i - 1));
+        }
+        curNum *= pow(-1, sign);
+        return curNum;
     }
 }   // namespace eegneo
