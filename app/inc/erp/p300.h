@@ -26,7 +26,7 @@ public:
 
 signals:
     void sendImgNum(int);
-    void sendMark(const std::string event);
+    void sendMark(const QString& event);
 
 private:
     double freq_2;

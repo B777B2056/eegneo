@@ -731,7 +731,7 @@ void PreprocessWindow::filt()
             int k;
             double y_n, *coff = new double[order];
             QQueue<double> *buf = new QQueue<double>[channelNum];
-            Filter::countBandPassCoef(order, sampleFreq, coff, lowPass, highPass);  // 计算滤波器系数
+            // Filter::countBandPassCoef(order, sampleFreq, coff, lowPass, highPass);  // 计算滤波器系数
             // 重新计算数据点y值
             std::map<int, std::vector<QPointF>>::iterator sample_iter;
             for(sample_iter = samplePoints.begin(); sample_iter != samplePoints.end(); sample_iter++)

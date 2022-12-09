@@ -1,28 +1,43 @@
 ﻿#include "acquisition/filter.h"
 
-void Filter::countBandPassCoef(int order, int sample_frequency, double *h, double low_cut, double high_cut)
+namespace eegneo
 {
-    assert(order % 2);
-    for (int i=0; i <= order / 2; i++)
+    namespace utils
     {
-        double s = (double)i - (double)order / 2.0;
-        h[i] = (sin(2 * M_PI * high_cut * s / sample_frequency) - sin(2 * M_PI * low_cut * s / sample_frequency)) / (M_PI * s);
-        h[i] = h[i] * hammingWindow(i, order + 1);
-        h[order - i] = h[i];
-    }
-}
+        Filter::Filter(double sampleFreqHz)
+            : mSampleFreqHz_(sampleFreqHz)
+            , mKaiser_(10.)
+        {
 
-//《数字信号处理C语言程序集》P230带阻滤波器处有错误，带阻滤波器的计算公式应为
-// h[i] = (sin(pi * s) - sin(wc1 * s) - sin(wc2 * s)) / (pi * s)
-void Filter::countNotchCoef(int order, int sample_frequency, double *h, double notch_cut)
-{
-    assert(order % 2);
-    for (int i=0; i <= order / 2; i++)
-    {
-        double s = (double)i - (double)order / 2.0;
-        h[i] = (-sin(2 * M_PI * notch_cut * s / sample_frequency) + sin(M_PI * s) - sin(2 * M_PI * (notch_cut + 0.01) * s / sample_frequency)) / (M_PI * s);
-        h[i] = h[i] * hammingWindow(i, order + 1);
-        h[order - i] = h[i];
-    }
-}
+        }
 
+        void Filter::lowPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result)
+        {
+            auto filterCoeffs = dsp::FirLowPassFilter(NumTaps, cutoffFreq, mSampleFreqHz_, mKaiser_);
+            mHolder_.Initialise(signal.size(), filterCoeffs, true);
+            mHolder_(signal.begin(), signal.end(), result.begin(), true);
+        }
+
+        void Filter::highPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result)
+        {
+            auto filterCoeffs = dsp::FirHighPassFilter(NumTaps, cutoffFreq, mSampleFreqHz_, mKaiser_);
+            mHolder_.Initialise(signal.size(), filterCoeffs, true);
+            mHolder_(signal.begin(), signal.end(), result.begin(), true);
+        }
+
+        void Filter::bandPass(double lowCutoffFreq, double highCutoffFreq, std::vector<double>& signal, std::vector<double>& result)
+        {
+            double bandWidth = highCutoffFreq - lowCutoffFreq;
+            auto filterCoeffs = dsp::FirBandPassFilter(NumTaps, lowCutoffFreq + (bandWidth / 2.0), bandWidth, mSampleFreqHz_, mKaiser_);
+            mHolder_.Initialise(signal.size(), filterCoeffs, true);
+            mHolder_(signal.begin(), signal.end(), result.begin(), true);
+        }
+
+        void Filter::notch(double notchFreq, std::vector<double>& signal, std::vector<double>& result)
+        {
+            auto filterCoeffs = dsp::FirNotchFilter(NumTaps, notchFreq, 4.0, mSampleFreqHz_, mKaiser_);
+            mHolder_.Initialise(signal.size(), filterCoeffs, true);
+            mHolder_(signal.begin(), signal.end(), result.begin(), true);
+        }
+    }   // namespace utils
+}   // namespace eegneo

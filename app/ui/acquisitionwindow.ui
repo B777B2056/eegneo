@@ -289,16 +289,6 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_3">
-          <property name="maximumSize">
-           <size>
-            <width>180</width>
-            <height>21</height>
-           </size>
-          </property>
-         </widget>
-        </item>
-        <item>
          <widget class="QPushButton" name="pushButton_3">
           <property name="maximumSize">
            <size>
@@ -308,6 +298,16 @@
           </property>
           <property name="text">
            <string>M2</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_3">
+          <property name="maximumSize">
+           <size>
+            <width>180</width>
+            <height>21</height>
+           </size>
           </property>
          </widget>
         </item>

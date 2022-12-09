@@ -24,13 +24,11 @@ extern "C"
 #pragma execution_character_set("utf-8")
 #endif
 
-const static double highPassFres[7] = {0.1, 0.3, 3.5, 8.0, 12.5, 16.5, 20.5};  // 高通滤波频率选择
-const static double lowPassFres[7] = {8.0, 12.5, 16.5, 20.5, 28.0, 45.0, 50.0};  // 低通滤波频率选择
-
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
     , mPlotTimer_(new QTimer(this)), mSharedMemory_(nullptr), mChart_(nullptr)
+    , mIsFiltOn_(false)
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
@@ -40,21 +38,6 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 
 AcquisitionWindow::~AcquisitionWindow()
 {
-    // 释放内存
-    std::vector<QLineSeries *> qls;
-    std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
-    for(iter = _markerInfo.marks.begin(); iter != _markerInfo.marks.end(); iter++)
-    {
-        qls.push_back(iter->first);
-        QGraphicsSimpleTextItem *t = (iter->second).second;
-        (iter->second).second = nullptr;
-        delete t;
-    }
-    _markerInfo.marks.clear();
-    for(std::size_t i = 0; i < qls.size(); i++)
-    {
-        delete qls[i];
-    }
     delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mBuf_;
@@ -65,20 +48,15 @@ AcquisitionWindow::~AcquisitionWindow()
 void AcquisitionWindow::setSignalSlotConnect()
 {
     // 信号与槽的链接：太尼玛恶心了，谁看谁傻逼
-    QObject::connect(ui->lineEdit, SIGNAL(editingFinished()), this, SLOT(onLineEditEditingFinished()));
-    QObject::connect(ui->lineEdit_2, SIGNAL(editingFinished()), this, SLOT(onLineEdit2EditingFinished()));
-    QObject::connect(ui->lineEdit_3, SIGNAL(editingFinished()), this, SLOT(onLineEdit3EditingFinished()));
-    QObject::connect(ui->lineEdit_4, SIGNAL(editingFinished()), this, SLOT(onLineEdit4EditingFinished()));
-
     QObject::connect(ui->pushButton, SIGNAL(clicked()), this, SLOT(onPushButtonClicked()));
     QObject::connect(ui->pushButton_2, SIGNAL(clicked()), this, SLOT(onPushButton2Clicked()));
     QObject::connect(ui->pushButton_3, SIGNAL(clicked()), this, SLOT(onPushButton3Clicked()));
     QObject::connect(ui->pushButton_4, SIGNAL(clicked()), this, SLOT(onPushButton4Clicked()));
     QObject::connect(ui->pushButton_5, SIGNAL(clicked()), this, SLOT(onPushButton5Clicked()));
 
-    QObject::connect(ui->comboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onComboBoxCurrentIndexChanged(int)));
-    QObject::connect(ui->comboBox_2, SIGNAL(currentIndexChanged(int)), this, SLOT(onComboBox2CurrentIndexChanged(int)));
-    QObject::connect(ui->comboBox_3, SIGNAL(currentIndexChanged(int)), this, SLOT(onComboBox3CurrentIndexChanged(int)));
+    QObject::connect(ui->comboBox, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBoxCurrentTextChanged(const QString &)));
+    QObject::connect(ui->comboBox_2, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBox2CurrentTextChanged(const QString &)));
+    QObject::connect(ui->comboBox_3, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBox3CurrentTextChanged(const QString &)));
 
     QObject::connect(ui->filter, SIGNAL(clicked()), this, SLOT(onFilterClicked()));
 
@@ -109,7 +87,7 @@ void AcquisitionWindow::showParticipantInfoWindow()
         this->mSampleRate_ = siw.sampleRate();
         this->mFileName_ = siw.subjectNum() + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
         this->mBuf_ = new double[this->mChannelNum_];
-        this->mChart_ = new eegneo::EEGWavePlotImpl(this->mChannelNum_);
+        this->mChart_ = new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
         this->startDataSampler();
         this->initChart();
         this->show();
@@ -553,28 +531,16 @@ void AcquisitionWindow::saveBehavioralP300(std::string path)
 }
 
 // 发送marker //
-void AcquisitionWindow::createMark(std::string event)
+void AcquisitionWindow::createMark(const QString& event)
 {
-    if(event.empty()) return;
-    // 添加新的marker直线
-    QLineSeries *line = new QLineSeries;
-    QPen splinePen; // 设置直线的颜色
-    splinePen.setBrush(Qt::red);
-    splinePen.setColor(Qt::red);
-    line->setPen(splinePen);
-    // _waveDrawingInfo.charts[0]->addSeries(line);
-    // _waveDrawingInfo.charts[0]->setAxisX(_waveDrawingInfo.axisX[0], line);
-    // _waveDrawingInfo.charts[0]->setAxisY(_waveDrawingInfo.axisY[0], line);
-    // 添加marker文字注释
-    QGraphicsSimpleTextItem *pItem = new QGraphicsSimpleTextItem(mChart_->chart());
-    pItem->setText(QString::fromStdString(event) + "\n" + QDateTime::currentDateTime().toString("hh:mm:ss"));
-    _markerInfo.marks[line] = std::make_pair(QDateTime::currentDateTime().toMSecsSinceEpoch(), pItem);
+    if(event.isNull() || event.isEmpty()) return;
+    mChart_->addOneMarkerLine(event);
     // 将marker写入文件
-    if(_fileInfo.isRec)
-    {
-        emit writeEvent(event);
-        _fileInfo.eventCount++;
-    }
+    // if(_fileInfo.isRec)
+    // {
+    //     emit writeEvent(event);
+    //     _fileInfo.eventCount++;
+    // }
 }
 
 void AcquisitionWindow::startDataSampler()
@@ -592,24 +558,17 @@ void AcquisitionWindow::startDataSampler()
     }
 }
 
-void AcquisitionWindow::lineEditHelper(int N)
-{
-    std::array<decltype (ui->lineEdit), 4> lineEditUi = {ui->lineEdit, ui->lineEdit_2, ui->lineEdit_3, ui->lineEdit_4};
-    if(!lineEditUi[N]->text().isEmpty())
-    {
-        _markerInfo.markerNames[N] = lineEditUi[N]->text().toStdString();
-    }
-}
+void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mChart_->setAxisYScale(0, mChannelNum_ * curMaxVoltage); }
+void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
 
 void AcquisitionWindow::initChart()
 {
     ui->graphicsView->setChart(mChart_->chart());                                   
-    // ui->graphicsView->setRenderHint(QPainter::Antialiasing);  
 
     mChart_->setAxisXScale(eegneo::Second::FIVE);
     mChart_->setAxisYScale(0, 10 * mChannelNum_);
 
-    QObject::connect(mPlotTimer_, SIGNAL(timeout()), this, SLOT(graphFresh()));
+    QObject::connect(mPlotTimer_, SIGNAL(timeout()), this, SLOT(updateWave()));
     mPlotTimer_->start(GRAPH_FRESH);
 }
 
@@ -620,7 +579,7 @@ void AcquisitionWindow::updateWave()
     ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
     if (!mSharedMemory_->unlock()) return;
 
-    mChart_->update(mBuf_);
+    mChart_->update(mBuf_, mIsFiltOn_, mLowCutoff_, mHighCutoff_, mNotchCutoff_);
 }
 
 // 数据获取
@@ -632,24 +591,6 @@ void AcquisitionWindow::updateWave()
 //         _fileInfo.curLine++;
 //     }
 // }
-
-// 图像刷新
-void AcquisitionWindow::graphFresh()
-{
-    // 波形刷新
-    updateWave();
-    /*绘制marker*/
-    std::map<QLineSeries *, std::pair<qint64, QGraphicsSimpleTextItem *>>::iterator iter;
-    for(iter = _markerInfo.marks.begin(); iter != _markerInfo.marks.end(); iter++)
-    {
-        QList<QPointF> marker_point;
-        marker_point.append(QPointF((iter->second).first, 0));
-        marker_point.append(QPointF((iter->second).first, 80));
-        iter->first->replace(marker_point);
-        // 文字标记
-        (iter->second).second->setPos(mChart_->chart()->mapToPosition(QPointF((iter->second).first, 50.0), iter->first));
-    }
-}
 
 // 停止写入数据并保存缓存txt文件
 void AcquisitionWindow::stopRec()
@@ -673,14 +614,14 @@ void AcquisitionWindow::p300Oddball()
         // 进入实验
         P300Oddball *p = new P300Oddball();
         QObject::connect(p, SIGNAL(sendImgNum(int)), this, SLOT(getImgNum(int)));
-        QObject::connect(p, SIGNAL(sendMark(const std::string)), this, SLOT(createMark(const std::string)));
+        QObject::connect(p, SIGNAL(sendMark(const QString&)), this, SLOT(createMark(const QString&)));
         p->show();
     }
 }
 
 void AcquisitionWindow::onPushButtonClicked()
 {
-    if(this->_fileInfo.isFinish == 0)
+    if(!this->_fileInfo.isFinish)
     {
         QMessageBox::critical(this, tr("错误"), "数据正在写入文件", QMessageBox::Ok);
     }
@@ -692,46 +633,28 @@ void AcquisitionWindow::onPushButtonClicked()
     }
 }
 
-// 选择带通滤波、凹陷滤波频率
-void AcquisitionWindow::onComboBoxCurrentIndexChanged(int index)
-{
-    if(index != 0)
-    {
-        _filtParam.lowCut = highPassFres[index - 1];
-    }
-}
+void AcquisitionWindow::onPushButton2Clicked() { this->createMark(ui->lineEdit->text()); }
+void AcquisitionWindow::onPushButton3Clicked() { this->createMark(ui->lineEdit_2->text()); }
+void AcquisitionWindow::onPushButton4Clicked() { this->createMark(ui->lineEdit_3->text()); }
+void AcquisitionWindow::onPushButton5Clicked() { this->createMark(ui->lineEdit_4->text()); }
+void AcquisitionWindow::onComboBoxCurrentTextChanged(const QString &text) { mLowCutoff_ = text.toDouble(); }
+void AcquisitionWindow::onComboBox2CurrentTextChanged(const QString &text) { mHighCutoff_ = text.toDouble(); }
+void AcquisitionWindow::onComboBox3CurrentTextChanged(const QString &text) { mNotchCutoff_ = text.toDouble(); }
 
-void AcquisitionWindow::onComboBox2CurrentIndexChanged(int index)
-{
-    if(index != 0)
-    {
-        _filtParam.highCut = lowPassFres[index - 1];
-    }
-}
-
-void AcquisitionWindow::onComboBox3CurrentIndexChanged(int index)
-{
-    if(index != 0)
-    {
-        _filtParam.notchCut = ((index == 1) ? 50.0 : 60.0);
-    }
-}
-
-// 按了"滤波"按钮后开始滤波
+// 按了"滤波"按钮后开始滤波，再按一次取消滤波
 void AcquisitionWindow::onFilterClicked()
 {
-    if(_filtParam.lowCut > 0.0 && _filtParam.highCut > 0.0 && _filtParam.notchCut > 0.0)
+    if (!mIsFiltOn_)
     {
-        if(_filtParam.lowCut >= _filtParam.highCut)
+        if((mLowCutoff_ > 0.0) || (mHighCutoff_ > 0.0) || (mNotchCutoff_ > 0.0))
         {
-            QMessageBox::critical(this, tr("错误"), "滤波频率错误", QMessageBox::Ok);
-            return;
+            mIsFiltOn_ = true;
+            ui->label_5->setText("On");
         }
-        // emit doFilt(_filtParam.lowCut, _filtParam.highCut, _filtParam.notchCut);
     }
-}
-
-void AcquisitionWindow::setInFilt()
-{
-    ui->label_5->setText("On");
+    else
+    {
+        mIsFiltOn_ = false;
+        ui->label_5->setText("Off");
+    }
 }

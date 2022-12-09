@@ -1,18 +1,28 @@
 ﻿#pragma once
-#include <QtMath>
-#include <cassert>
+#include "third/dsp/dsp_filter.hpp"
+#include "third/dsp/dsp_window_functions.hpp"
 
-/* 汉明窗函数计算 */
-#define hammingWindow(n, N) \
-    (   \
-        0.54 - 0.46 * cos(2 * (M_PI) * (n) / ((N) - 1)) \
-    )
+namespace eegneo
+{
+    namespace utils
+    {
+        class Filter
+        {
+        public:
+            Filter(double sampleFreqHz);
 
-// 注：FIR滤波器阶数必须为奇数，这样才能使FIR滤波器为I型滤波器
-// 若滤波器非I型，则对于所设计的滤波器类型存在要求(例如不能设计某些类型滤波器)
-namespace Filter{
-    // 带通滤波器
-    void countBandPassCoef(int order, int sample_frequency, double *h, double low_cut, double high_cut);
-    // 带阻滤波器(此处特化为陷波器)
-    void countNotchCoef(int order, int sample_frequency, double *h, double notch_cut);
-};
+            constexpr static std::size_t numTaps() { return NumTaps; }
+
+            void lowPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result);
+            void highPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result);
+            void bandPass(double lowCutoffFreq, double highCutoffFreq, std::vector<double>& signal, std::vector<double>& result);
+            void notch(double notchFreq, std::vector<double>& signal, std::vector<double>& result);
+
+        private:
+            double mSampleFreqHz_;
+            dsp::KaiserGenerator mKaiser_;
+            dsp::FilterHolder<double> mHolder_;
+            constexpr static std::size_t NumTaps = 51;
+        };
+    }   // namespace utils
+}   // namespace eegneo
