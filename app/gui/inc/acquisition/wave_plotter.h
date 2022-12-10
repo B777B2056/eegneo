@@ -60,16 +60,11 @@ namespace eegneo
         ~EEGWavePlotImpl();
 
         void addOneMarkerLine(const QString& eventStr);
-        void update(double* data, bool isFilt, double lowCutoff, double highCutoff, double notchCutoff);
+        void update(double* data) override;
 
     private:
-        utils::Filter* mFilter_;
-        std::vector<std::vector<double>> mOriginalSignals_;
-        std::vector<std::vector<double>> mFiltResults_;
         std::vector<std::tuple<QLineSeries*, QGraphicsSimpleTextItem*, QList<QPointF>>> mMarkerLineTbl_;
 
-        void update(double* data) override;
         void setLineColor(QLineSeries* line);   
-        void filt(double* data, double lowCutoff, double highCutoff, double notchCutoff);
     };
 }   // namespace eegneo

@@ -1,16 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
-project(eegneo VERSION 0.9.0 LANGUAGES CXX)
 
-set(CMAKE_AUTOUIC_SEARCH_PATHS "ui")
+include_directories(".")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Charts)
-
-include_directories("inc")
-
-file(GLOB HEADERS "inc/*.h" "inc/*/*.h")
-file(GLOB SOURCES "src/mainwindow.cpp" "src/*/*.cpp")
-file(GLOB EDFLIB_SOURCES "third/edflib/*.c")
-file(GLOB UI "ui/*.ui")
-
-add_executable(eegneo ${HEADERS} ${UI} "src/main.cpp" ${SOURCES} ${EDFLIB_SOURCES})
-target_link_libraries(eegneo PRIVATE Qt6::Core Qt6::Widgets Qt6::Charts)
+add_subdirectory("gui")
+add_subdirectory("sampler")

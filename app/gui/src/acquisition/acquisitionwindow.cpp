@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QSharedMemory>
 #include <QStringList>
+#include <QTcpSocket>
 #include <map>
 #include <vector>
 #include <sstream>
@@ -26,9 +27,8 @@ extern "C"
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
-    , mSampleRate_(0), mChannelNum_(0)
+    , mSampleRate_(0), mChannelNum_(0), mIpcChannel_(nullptr)
     , mPlotTimer_(new QTimer(this)), mSharedMemory_(nullptr), mChart_(nullptr)
-    , mIsFiltOn_(false)
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
@@ -38,6 +38,11 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 
 AcquisitionWindow::~AcquisitionWindow()
 {
+    {
+        eegneo::SendCmd(mIpcChannel_, eegneo::ShutdownCmd{});
+        mIpcChannel_->disconnectFromHost();
+        delete mIpcChannel_;
+    }
     delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mBuf_;
@@ -60,10 +65,10 @@ void AcquisitionWindow::setSignalSlotConnect()
 
     QObject::connect(ui->filter, SIGNAL(clicked()), this, SLOT(onFilterClicked()));
 
-    QObject::connect(ui->actionStart_Recording, SIGNAL(triggered()), this, SLOT(createTempTXT()));
+    QObject::connect(ui->actionStart_Recording, SIGNAL(triggered()), this, SLOT(startRecording()));
     QObject::connect(ui->actionEDF, SIGNAL(triggered()), this, SLOT(saveEdfPlus()));
     QObject::connect(ui->actionTXT, SIGNAL(triggered()), this, SLOT(saveTxt()));
-    QObject::connect(ui->actionStop_Recording, SIGNAL(triggered()), this, SLOT(stopRec()));
+    QObject::connect(ui->actionStop_Recording, SIGNAL(triggered()), this, SLOT(stopRecording()));
     QObject::connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
     QObject::connect(ui->action_10_10uV, SIGNAL(triggered()), this, SLOT(setVoltage10()));
     QObject::connect(ui->action_25_25uV, SIGNAL(triggered()), this, SLOT(setVoltage25()));
@@ -88,6 +93,7 @@ void AcquisitionWindow::showParticipantInfoWindow()
         this->mFileName_ = siw.subjectNum() + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
         this->mBuf_ = new double[this->mChannelNum_];
         this->mChart_ = new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
+        this->mFiltCmd_.sampleRate = mSampleRate_;
         this->startDataSampler();
         this->initChart();
         this->show();
@@ -101,16 +107,10 @@ void AcquisitionWindow::showParticipantInfoWindow()
 }
 
 // 创建缓存TXT文件
-void AcquisitionWindow::createTempTXT()
+void AcquisitionWindow::startRecording()
 {
-    // 缓存文件放入一个文件夹
-    QDir dir;
-    if (!dir.exists(QString::fromStdString("temp files")))
-    {
-        dir.mkpath("temp files");
-    }
-    _fileInfo.tempFiles = "temp files//" + _fileInfo.tempFiles;
-    _fileInfo.isRec = true;
+    mRecCmd_.isRecordOn = true;
+    eegneo::SendCmd(mIpcChannel_, mRecCmd_);
 }
 
 void AcquisitionWindow::setFilePath(int s, QString& path)
@@ -547,14 +547,24 @@ void AcquisitionWindow::startDataSampler()
 {
     QStringList args;
     args << QString::number(mChannelNum_);
-    mDataSampler_.start("E:/jr/eegneo/build/sampler/Debug/eegneo_sampler.exe", args);
+    mDataSampler_.start("E:/jr/eegneo/build/app/sampler/Debug/eegneo_sampler.exe", args);
     if (mDataSampler_.waitForStarted(-1))
     {
-        mSharedMemory_ = new QSharedMemory{"Sampler"};
-        while (!mSharedMemory_->attach())
+        mIpcChannel_ = new QTcpSocket();
+        mIpcChannel_->connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
+        if (mIpcChannel_->waitForConnected(-1))
+        {
+            mSharedMemory_ = new QSharedMemory{"Sampler"};
+            while (!mSharedMemory_->attach());
+        }
+        else
         {
 
         }
+    }
+    else
+    {
+
     }
 }
 
@@ -579,7 +589,7 @@ void AcquisitionWindow::updateWave()
     ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
     if (!mSharedMemory_->unlock()) return;
 
-    mChart_->update(mBuf_, mIsFiltOn_, mLowCutoff_, mHighCutoff_, mNotchCutoff_);
+    mChart_->update(mBuf_);
 }
 
 // 数据获取
@@ -593,9 +603,10 @@ void AcquisitionWindow::updateWave()
 // }
 
 // 停止写入数据并保存缓存txt文件
-void AcquisitionWindow::stopRec()
-{
-    emit doneRec();
+void AcquisitionWindow::stopRecording()
+{   
+    mRecCmd_.isRecordOn = false;
+    eegneo::SendCmd(mIpcChannel_, mRecCmd_);
 }
 
 // p300 Oddball范式
@@ -637,24 +648,29 @@ void AcquisitionWindow::onPushButton2Clicked() { this->createMark(ui->lineEdit->
 void AcquisitionWindow::onPushButton3Clicked() { this->createMark(ui->lineEdit_2->text()); }
 void AcquisitionWindow::onPushButton4Clicked() { this->createMark(ui->lineEdit_3->text()); }
 void AcquisitionWindow::onPushButton5Clicked() { this->createMark(ui->lineEdit_4->text()); }
-void AcquisitionWindow::onComboBoxCurrentTextChanged(const QString &text) { mLowCutoff_ = text.toDouble(); }
-void AcquisitionWindow::onComboBox2CurrentTextChanged(const QString &text) { mHighCutoff_ = text.toDouble(); }
-void AcquisitionWindow::onComboBox3CurrentTextChanged(const QString &text) { mNotchCutoff_ = text.toDouble(); }
+void AcquisitionWindow::onComboBoxCurrentTextChanged(const QString &text) { mFiltCmd_.lowCutoff = text.toDouble(); }
+void AcquisitionWindow::onComboBox2CurrentTextChanged(const QString &text) { mFiltCmd_.highCutoff = text.toDouble(); }
+void AcquisitionWindow::onComboBox3CurrentTextChanged(const QString &text) { mFiltCmd_.notchCutoff = text.toDouble(); }
 
 // 按了"滤波"按钮后开始滤波，再按一次取消滤波
 void AcquisitionWindow::onFilterClicked()
 {
-    if (!mIsFiltOn_)
+    if (!mFiltCmd_.isFiltOn)
     {
-        if((mLowCutoff_ > 0.0) || (mHighCutoff_ > 0.0) || (mNotchCutoff_ > 0.0))
-        {
-            mIsFiltOn_ = true;
+        if((mFiltCmd_.lowCutoff > 0.0) || (mFiltCmd_.highCutoff > 0.0) || (mFiltCmd_.notchCutoff > 0.0))
+        {   
+            mFiltCmd_.isFiltOn = true;
+            eegneo::SendCmd(mIpcChannel_, mFiltCmd_);
+
             ui->label_5->setText("On");
         }
     }
     else
     {
-        mIsFiltOn_ = false;
+
+        mFiltCmd_.isFiltOn = false;
+        eegneo::SendCmd(mIpcChannel_, mFiltCmd_);
+
         ui->label_5->setText("Off");
     }
 }

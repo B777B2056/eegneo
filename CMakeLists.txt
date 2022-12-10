@@ -13,5 +13,4 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 add_subdirectory("app")
-add_subdirectory("sampler")
 # add_subdirectory("test")

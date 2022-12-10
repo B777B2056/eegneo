@@ -6,6 +6,7 @@
 #include <string>
 #include <array>
 #include "acquisition/wave_plotter.h"
+#include "common/common.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class AcquisitionWindow; }
@@ -13,6 +14,8 @@ QT_END_NAMESPACE
 
 #define GRAPH_FRESH 50  // 触发波形显示定时器的时间，单位为ms
 #define MANUAL_MAKER 4 // 手动Mark数量
+
+class QTcpSocket;
 
 /* 文件保存相关 */
 struct FileInfo
@@ -62,16 +65,15 @@ private:
     std::size_t mSampleRate_; 
     std::size_t mChannelNum_;
     QProcess mDataSampler_;
+    QTcpSocket* mIpcChannel_;
     // 绘图相关
     QTimer* mPlotTimer_;
     double* mBuf_;
     QSharedMemory* mSharedMemory_;
     eegneo::EEGWavePlotImpl* mChart_;
     // 滤波相关
-    bool mIsFiltOn_;
-    double mLowCutoff_ = -1.0;  // 低通频率
-    double mHighCutoff_ = -1.0; // 高通频率
-    double mNotchCutoff_ = -1.0;    // 陷波频率
+    eegneo::RecordCmd mRecCmd_;
+    eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关
     FileInfo _fileInfo;
     // 视觉刺激实验中的图片总数量
@@ -88,6 +90,18 @@ signals:
 
     /* 槽 */
 private slots:
+    // 更新波形显示
+    void updateWave();
+    // 创建缓存的TXT文件后开始记录数据
+    void startRecording();
+    // 停止写入数据并保存缓存txt文件
+    void stopRecording();
+    // 保存为EDF+文件
+    void saveEdfPlus();
+    // 保存为3个txt文档（样本数据点，事件信息，描述文档）
+    void saveTxt();
+    // oddball范式p300实验
+    void p300Oddball();
     // 跳转到当前窗口
     void receiveJump2Accquisition() { this->showParticipantInfoWindow(); }
     // 返回主界面
@@ -116,16 +130,4 @@ private slots:
     void setTime1() { this->setTimeAxisScale(1); }
     void setTime5() { this->setTimeAxisScale(5); }
     void setTime10() { this->setTimeAxisScale(10); }
-    // 更新波形显示
-    void updateWave();
-    // 停止写入数据并保存缓存txt文件
-    void stopRec();
-    // 保存为EDF+文件
-    void saveEdfPlus();
-    // 保存为3个txt文档（样本数据点，事件信息，描述文档）
-    void saveTxt();
-    // 创建缓存的TXT文件
-    void createTempTXT();
-    // oddball范式p300实验
-    void p300Oddball();
 };

@@ -1,7 +1,5 @@
 #include "acquisition/wave_plotter.h"
-#include <iterator>
 #include <QDateTime>
-#include "acquisition/filter.h"
 
 namespace eegneo
 {
@@ -82,19 +80,13 @@ namespace eegneo
 
     EEGWavePlotImpl::EEGWavePlotImpl(std::size_t channelNum, std::size_t sampleRate, std::size_t freshMs)
         : WavePlotImpl(channelNum, sampleRate, freshMs)
-        , mFilter_(new utils::Filter(sampleRate))
-        , mOriginalSignals_(channelNum)
-        , mFiltResults_(channelNum)
     {
-        for (std::size_t i = 0; i < mLineSeriesNum_; ++i)
-        {
-            mFiltResults_[i].resize(utils::Filter::numTaps());
-        }
+
     }
 
     EEGWavePlotImpl::~EEGWavePlotImpl()
     {
-        delete mFilter_;
+
     }
 
     void EEGWavePlotImpl::addOneMarkerLine(const QString& eventStr)
@@ -111,30 +103,6 @@ namespace eegneo
         text->setText(eventStr);
 
         mMarkerLineTbl_.emplace_back(std::make_tuple(line, text, points));
-    }
-
-    void EEGWavePlotImpl::update(double* data, bool isFilt, double lowCutoff, double highCutoff, double notchCutoff)
-    {
-        if(mOriginalSignals_[0].size() >= utils::Filter::numTaps())
-        {
-            for (std::size_t i = 0; i < mLineSeriesNum_; ++i)
-            {
-                mOriginalSignals_[i].erase(mOriginalSignals_[i].begin());
-                mOriginalSignals_[i].push_back(data[i]);
-            }
-        }
-        else
-        {
-            for (std::size_t i = 0; i < mLineSeriesNum_; ++i)
-            {
-                mOriginalSignals_[i].push_back(data[i]);
-            }
-        }
-        if (isFilt)
-        {
-            this->filt(data, lowCutoff, highCutoff, notchCutoff);
-        }
-        this->update(data);
     }
 
     void EEGWavePlotImpl::update(double* data)
@@ -176,35 +144,5 @@ namespace eegneo
         splinePen.setBrush(Qt::red);
         splinePen.setColor(Qt::red);
         line->setPen(splinePen);
-    }
-
-    void EEGWavePlotImpl::filt(double* data, double lowCutoff, double highCutoff, double notchCutoff)
-    {
-        for (std::size_t i = 0; i < mLineSeriesNum_; ++i)
-        {
-            auto& signal = mOriginalSignals_[i];
-            auto& result = mFiltResults_[i];
-            if ((lowCutoff >= 0.0) && (highCutoff < 0.0))   // 高通滤波
-            {
-                mFilter_->lowPass(lowCutoff, signal, result);
-            }
-            else if ((lowCutoff < 0.0) && (highCutoff >= 0.0))  // 低通滤波
-            {
-                mFilter_->highPass(highCutoff, signal, result);
-            }
-            else if ((lowCutoff >= 0.0) && (highCutoff >= 0.0)) // 带通滤波
-            {
-                mFilter_->bandPass(lowCutoff, highCutoff, signal, result);
-            }
-            else    // 无滤波
-            {
-
-            }
-            if (notchCutoff > 0.0)  // 陷波滤波
-            {
-                mFilter_->notch(notchCutoff, signal, result);
-            }
-            data[i] = result.back();
-        }
     }
 }   // namespace eegneo

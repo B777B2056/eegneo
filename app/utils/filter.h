@@ -9,7 +9,9 @@ namespace eegneo
         class Filter
         {
         public:
+            Filter() : mSampleFreqHz_(0.0), mKaiser_(10.) {}
             Filter(double sampleFreqHz);
+            void setSampleFreqHz(double sampleFreqHz) { this->mSampleFreqHz_ = sampleFreqHz; }
 
             constexpr static std::size_t numTaps() { return NumTaps; }
 

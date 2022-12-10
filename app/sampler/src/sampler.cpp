@@ -1,16 +1,18 @@
 #include "sampler.h"
 #include <cstring>
+#include <cstdlib>
 #include <QByteArray>
+#include <QTcpSocket>
+#include "utils/filter.h"
 
 namespace eegneo
 {
     constexpr const char* RECORD_FILE_PATH = "E:/jr/eegneo/temp.txt";
 
-    DataSampler::DataSampler(std::size_t channelNum)
-        : mBuf_(new double[channelNum])
-        , mChannelNum_(channelNum)
-        , mRecordFile_{RECORD_FILE_PATH, std::ios::out}
-        , mSharedMemory_{"Sampler"}
+    DataSampler::DataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
+        : mBuf_(new double[channelNum]), mChannelNum_(channelNum), mIpcChannel_(ipcChannel)
+        , mRecordFile_{RECORD_FILE_PATH, std::ios::out}, mSharedMemory_{"Sampler"}, mIsStop_(false)
+        , mFilter_(new utils::Filter()), mFiltBuf_(new double[channelNum]), mProcessThread_{&DataSampler::start, this}
     {
         if (!mRecordFile_.is_open())
         {
@@ -22,23 +24,47 @@ namespace eegneo
         }
         if (!mSharedMemory_.create(mChannelNum_ * sizeof(double)))
         {
-            
+            throw "Shared memory create failed!";
+        }
+
+        mOriginalSignals_.resize(mChannelNum_);
+        mFiltResults_.resize(mChannelNum_);
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mFiltResults_[i].resize(utils::Filter::numTaps());
         }
     }
 
     DataSampler::~DataSampler()
     {
+        if (mProcessThread_.joinable())
+        {
+            mProcessThread_.join();
+        }
+
         delete[] mBuf_;
+        delete[] mFiltBuf_;
+        delete mFilter_;
     }
 
     void DataSampler::start()
     {
-        for (;;)
+        while (!mIsStop_)
         {
+            std::unique_lock<std::mutex> lock(mMutex_);
             this->doSample();
-            this->doRecord();
+            if (mRecCmd_.isRecordOn) this->doRecord();
+            if (mFiltCmd_.isFiltOn) this->doFilt();
+
             if (!mSharedMemory_.lock()) continue;
-            ::memcpy(mSharedMemory_.data(), mBuf_, mChannelNum_ * sizeof(double));
+            if (mFiltCmd_.isFiltOn)
+            {
+                ::memcpy(mSharedMemory_.data(), mFiltBuf_, mChannelNum_ * sizeof(double));
+            }
+            else
+            {
+                ::memcpy(mSharedMemory_.data(), mBuf_, mChannelNum_ * sizeof(double));
+            }
             if (!mSharedMemory_.unlock()) continue;
         }
     }
@@ -52,8 +78,88 @@ namespace eegneo
         mRecordFile_ << "\n";
     }
 
-    TestDataSampler::TestDataSampler(std::size_t channelNum)
-        : DataSampler(channelNum)
+    void DataSampler::doFilt()
+    {
+        if (mOriginalSignals_[0].size() < utils::Filter::numTaps())
+        {
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
+            {
+                mOriginalSignals_[i].push_back(mBuf_[i]);
+            }
+            return ;
+        }
+
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mOriginalSignals_[i].erase(mOriginalSignals_[i].begin());
+            mOriginalSignals_[i].push_back(mBuf_[i]);
+        }
+
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            auto& signal = mOriginalSignals_[i];
+            auto& result = mFiltResults_[i];
+            if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
+            {
+                mFilter_->lowPass(mFiltCmd_.lowCutoff, signal, result);
+            }
+            else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
+            {
+                mFilter_->highPass(mFiltCmd_.highCutoff, signal, result);
+            }
+            else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
+            {
+                mFilter_->bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff, signal, result);
+            }
+            else    // 无滤波
+            {
+
+            }
+            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
+            {
+                mFilter_->notch(mFiltCmd_.notchCutoff, signal, result);
+            }
+            mFiltBuf_[i] = result.back();
+        }
+    }
+
+    void DataSampler::handleIpcMsg()
+    {
+        std::unique_lock<std::mutex> lock(mMutex_);
+        if (mIpcChannel_->bytesAvailable() <= 0)
+        {
+            return;
+        }
+        CmdHeader cmdHdr;
+        if (!mIpcChannel_->read((char*)&cmdHdr, sizeof(cmdHdr)))
+        {
+            return;
+        }
+        switch (cmdHdr.id)
+        {
+        case CmdId::Rec:
+            if (RecordCmd cmd; mIpcChannel_->read((char*)&cmd, sizeof(cmd)))
+            {
+                this->mRecCmd_ = cmd;   // 设置记录参数
+            }
+            break;
+        case CmdId::Filt:
+            if (FiltCmd cmd; mIpcChannel_->read((char*)&cmd, sizeof(cmd)))
+            {
+                this->mFiltCmd_ = cmd;  // 设置滤波参数
+                mFilter_->setSampleFreqHz(cmd.sampleRate);
+            }
+            break;
+        case CmdId::Shutdown:
+            this->mIsStop_ = true;  // 退出本进程
+            break;
+        default:
+            break;
+        }
+    }
+
+    TestDataSampler::TestDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
+        : DataSampler(channelNum, ipcChannel)
         // , mDataFile_{DATA_FILE_PATH, std::ios::in}
     {
         // if (!mDataFile_.is_open())
@@ -76,8 +182,8 @@ namespace eegneo
         serialPort.flush();
     }
 
-    ShanghaiDataSampler::ShanghaiDataSampler(std::size_t channelNum, const QString& portName)
-        : DataSampler(channelNum)
+    ShanghaiDataSampler::ShanghaiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel, const QString& portName)
+        : DataSampler(channelNum, ipcChannel)
         , mPortName_(portName)
     {
         this->initSerialPort();
@@ -200,8 +306,8 @@ namespace eegneo
         return (double)target * MAGIC_COFF;
     }
 
-    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
-        : DataSampler(channelNum)
+    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
+        : DataSampler(channelNum, ipcChannel)
     {
         client.bind(QHostAddress::LocalHost, 4000);
     }

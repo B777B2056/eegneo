@@ -12,7 +12,7 @@
 #include "utils/charthelp.h"
 #include "settings/setchannelname.h"
 #include "settings/seteventchannel.h"
-#include "acquisition/filter.h"
+// #include "acquisition/filter.h"
 #include "settings/filtersetting.h"
 #include "analysis/psd.h"
 #include "analysis/wigner.h"

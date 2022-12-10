@@ -1,4 +1,4 @@
-﻿#include "acquisition/filter.h"
+﻿#include "filter.h"
 
 namespace eegneo
 {
