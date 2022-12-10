@@ -15,11 +15,8 @@ int main(int argc, char* argv[])
         return 1;
     }
     while (!svr.waitForNewConnection());
-
-    auto* ipcChannel = svr.nextPendingConnection();
     
-    eegneo::TestDataSampler sampler{std::stoull(argv[1]), ipcChannel};
-    QObject::connect(ipcChannel, SIGNAL(readyRead()), &sampler, SLOT(handleIpcMsg()));
+    eegneo::TestDataSampler sampler{std::stoull(argv[1]), svr.nextPendingConnection()};
     
     return app.exec();;
 }

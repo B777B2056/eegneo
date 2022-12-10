@@ -9,22 +9,25 @@ namespace eegneo
         class Filter
         {
         public:
-            Filter() : mSampleFreqHz_(0.0), mKaiser_(10.) {}
+            Filter();
             Filter(double sampleFreqHz);
+
             void setSampleFreqHz(double sampleFreqHz) { this->mSampleFreqHz_ = sampleFreqHz; }
+            void appendData(double originalData);
 
-            constexpr static std::size_t numTaps() { return NumTaps; }
-
-            void lowPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result);
-            void highPass(double cutoffFreq, std::vector<double>& signal, std::vector<double>& result);
-            void bandPass(double lowCutoffFreq, double highCutoffFreq, std::vector<double>& signal, std::vector<double>& result);
-            void notch(double notchFreq, std::vector<double>& signal, std::vector<double>& result);
+            double lowPass(double cutoffFreq);
+            double highPass(double cutoffFreq);
+            double bandPass(double lowCutoffFreq, double highCutoffFreq);
+            double notch(double notchFreq);
 
         private:
             double mSampleFreqHz_;
             dsp::KaiserGenerator mKaiser_;
             dsp::FilterHolder<double> mHolder_;
             constexpr static std::size_t NumTaps = 51;
+
+            std::vector<double> mOriginalSignal_;
+            std::vector<double> mFiltResult_;
         };
     }   // namespace utils
 }   // namespace eegneo

@@ -6,7 +6,7 @@
 #include <string>
 #include <array>
 #include "acquisition/wave_plotter.h"
-#include "common/common.h"
+#include "utils/ipc.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class AcquisitionWindow; }
@@ -65,13 +65,13 @@ private:
     std::size_t mSampleRate_; 
     std::size_t mChannelNum_;
     QProcess mDataSampler_;
-    QTcpSocket* mIpcChannel_;
     // 绘图相关
     QTimer* mPlotTimer_;
     double* mBuf_;
     QSharedMemory* mSharedMemory_;
     eegneo::EEGWavePlotImpl* mChart_;
     // 滤波相关
+    eegneo::utils::IpcWriter* mIpcWriter_;
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关

@@ -3,12 +3,11 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
-#include <QObject>
 #include <QSerialPort>
 #include <QString>
 #include <QSharedMemory>
 #include <QUdpSocket>
-#include "common/common.h"
+#include "utils/ipc.h"
 
 class QTcpSocket;
 
@@ -16,12 +15,9 @@ namespace eegneo
 {
     namespace utils { class Filter; }
 
-    class DataSampler : public QObject
+    class DataSampler
     {
-        Q_OBJECT
-
     public:
-        DataSampler(QObject* parent = nullptr) : mBuf_(nullptr), mIpcChannel_(nullptr) {}
         DataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
         DataSampler(const DataSampler&) = delete;
         DataSampler& operator=(const DataSampler&) = delete;
@@ -37,31 +33,27 @@ namespace eegneo
         virtual void doSample() = 0;
 
     private:
-        std::mutex mMutex_;
-        QTcpSocket* mIpcChannel_;
+        utils::IpcReader mIpcReader_;
         std::fstream mRecordFile_;
         QSharedMemory mSharedMemory_;
         RecordCmd mRecCmd_;
         FiltCmd mFiltCmd_;
+        
+        std::mutex mMutex_;
         std::atomic_bool mIsStop_;
         std::thread mProcessThread_;
 
         utils::Filter* mFilter_;
         double* mFiltBuf_;
-        std::vector<std::vector<double>> mOriginalSignals_;
-        std::vector<std::vector<double>> mFiltResults_;
 
         void doRecord();
         void doFilt();
 
-    public slots:
-        void handleIpcMsg();
+        void setIpcCallback();
     };
 
     class TestDataSampler : public DataSampler
     {
-        Q_OBJECT
-
     public:
         TestDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
         ~TestDataSampler() = default;
@@ -75,8 +67,6 @@ namespace eegneo
 
     class ShanghaiDataSampler : public DataSampler
     {
-        Q_OBJECT
-
     public:
         ShanghaiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel, const QString& portName);
         ~ShanghaiDataSampler();
@@ -97,8 +87,6 @@ namespace eegneo
 
     class ShanxiDataSampler : public DataSampler
     {
-        Q_OBJECT
-
     public:
         ShanxiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
         ~ShanxiDataSampler() = default;

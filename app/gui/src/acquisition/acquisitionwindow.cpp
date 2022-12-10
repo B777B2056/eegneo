@@ -25,9 +25,14 @@ extern "C"
 #pragma execution_character_set("utf-8")
 #endif
 
+namespace
+{
+    static QTcpSocket IPC_WRITER_SOCKET;
+}
+
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
-    , mSampleRate_(0), mChannelNum_(0), mIpcChannel_(nullptr)
+    , mSampleRate_(0), mChannelNum_(0), mIpcWriter_(nullptr)
     , mPlotTimer_(new QTimer(this)), mSharedMemory_(nullptr), mChart_(nullptr)
     , ui(new Ui::AcquisitionWindow)
 {
@@ -38,11 +43,9 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 
 AcquisitionWindow::~AcquisitionWindow()
 {
-    {
-        eegneo::SendCmd(mIpcChannel_, eegneo::ShutdownCmd{});
-        mIpcChannel_->disconnectFromHost();
-        delete mIpcChannel_;
-    }
+    mIpcWriter_->sendCmd(eegneo::ShutdownCmd{});
+    delete mIpcWriter_;
+    mPlotTimer_->stop();
     delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mBuf_;
@@ -110,7 +113,7 @@ void AcquisitionWindow::showParticipantInfoWindow()
 void AcquisitionWindow::startRecording()
 {
     mRecCmd_.isRecordOn = true;
-    eegneo::SendCmd(mIpcChannel_, mRecCmd_);
+    mIpcWriter_->sendCmd(mRecCmd_);
 }
 
 void AcquisitionWindow::setFilePath(int s, QString& path)
@@ -550,10 +553,10 @@ void AcquisitionWindow::startDataSampler()
     mDataSampler_.start("E:/jr/eegneo/build/app/sampler/Debug/eegneo_sampler.exe", args);
     if (mDataSampler_.waitForStarted(-1))
     {
-        mIpcChannel_ = new QTcpSocket();
-        mIpcChannel_->connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
-        if (mIpcChannel_->waitForConnected(-1))
+        IPC_WRITER_SOCKET.connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
+        if (IPC_WRITER_SOCKET.waitForConnected(-1))
         {
+            mIpcWriter_ = new eegneo::utils::IpcWriter(&IPC_WRITER_SOCKET);
             mSharedMemory_ = new QSharedMemory{"Sampler"};
             while (!mSharedMemory_->attach());
         }
@@ -606,7 +609,7 @@ void AcquisitionWindow::updateWave()
 void AcquisitionWindow::stopRecording()
 {   
     mRecCmd_.isRecordOn = false;
-    eegneo::SendCmd(mIpcChannel_, mRecCmd_);
+    mIpcWriter_->sendCmd(mRecCmd_);
 }
 
 // p300 Oddball范式
@@ -660,7 +663,7 @@ void AcquisitionWindow::onFilterClicked()
         if((mFiltCmd_.lowCutoff > 0.0) || (mFiltCmd_.highCutoff > 0.0) || (mFiltCmd_.notchCutoff > 0.0))
         {   
             mFiltCmd_.isFiltOn = true;
-            eegneo::SendCmd(mIpcChannel_, mFiltCmd_);
+            mIpcWriter_->sendCmd(mFiltCmd_);
 
             ui->label_5->setText("On");
         }
@@ -669,7 +672,7 @@ void AcquisitionWindow::onFilterClicked()
     {
 
         mFiltCmd_.isFiltOn = false;
-        eegneo::SendCmd(mIpcChannel_, mFiltCmd_);
+        mIpcWriter_->sendCmd(mFiltCmd_);
 
         ui->label_5->setText("Off");
     }

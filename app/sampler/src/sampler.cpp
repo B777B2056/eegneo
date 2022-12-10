@@ -10,9 +10,9 @@ namespace eegneo
     constexpr const char* RECORD_FILE_PATH = "E:/jr/eegneo/temp.txt";
 
     DataSampler::DataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
-        : mBuf_(new double[channelNum]), mChannelNum_(channelNum), mIpcChannel_(ipcChannel)
+        : mBuf_(new double[channelNum]), mChannelNum_(channelNum), mIpcReader_(ipcChannel)
         , mRecordFile_{RECORD_FILE_PATH, std::ios::out}, mSharedMemory_{"Sampler"}, mIsStop_(false)
-        , mFilter_(new utils::Filter()), mFiltBuf_(new double[channelNum]), mProcessThread_{&DataSampler::start, this}
+        , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum]), mProcessThread_{&DataSampler::start, this}
     {
         if (!mRecordFile_.is_open())
         {
@@ -26,13 +26,7 @@ namespace eegneo
         {
             throw "Shared memory create failed!";
         }
-
-        mOriginalSignals_.resize(mChannelNum_);
-        mFiltResults_.resize(mChannelNum_);
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mFiltResults_[i].resize(utils::Filter::numTaps());
-        }
+        this->setIpcCallback();
     }
 
     DataSampler::~DataSampler()
@@ -44,7 +38,7 @@ namespace eegneo
 
         delete[] mBuf_;
         delete[] mFiltBuf_;
-        delete mFilter_;
+        delete[] mFilter_;
     }
 
     void DataSampler::start()
@@ -80,82 +74,56 @@ namespace eegneo
 
     void DataSampler::doFilt()
     {
-        if (mOriginalSignals_[0].size() < utils::Filter::numTaps())
-        {
-            for (std::size_t i = 0; i < mChannelNum_; ++i)
-            {
-                mOriginalSignals_[i].push_back(mBuf_[i]);
-            }
-            return ;
-        }
-
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            mOriginalSignals_[i].erase(mOriginalSignals_[i].begin());
-            mOriginalSignals_[i].push_back(mBuf_[i]);
-        }
-
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            auto& signal = mOriginalSignals_[i];
-            auto& result = mFiltResults_[i];
+            double afterFiltData = -1.0;
+            mFilter_[i].appendData(mBuf_[i]);
             if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
             {
-                mFilter_->lowPass(mFiltCmd_.lowCutoff, signal, result);
+                afterFiltData = mFilter_[i].lowPass(mFiltCmd_.lowCutoff);
             }
             else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
             {
-                mFilter_->highPass(mFiltCmd_.highCutoff, signal, result);
+                afterFiltData = mFilter_[i].highPass(mFiltCmd_.highCutoff);
             }
             else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
             {
-                mFilter_->bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff, signal, result);
+                afterFiltData = mFilter_[i].bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
             }
             else    // 无滤波
             {
-
+                afterFiltData = mBuf_[i];
             }
             if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
             {
-                mFilter_->notch(mFiltCmd_.notchCutoff, signal, result);
+                afterFiltData = mFilter_[i].notch(mFiltCmd_.notchCutoff);
             }
-            mFiltBuf_[i] = result.back();
+            mFiltBuf_[i] = afterFiltData;
         }
     }
 
-    void DataSampler::handleIpcMsg()
+    void DataSampler::setIpcCallback()
     {
-        std::unique_lock<std::mutex> lock(mMutex_);
-        if (mIpcChannel_->bytesAvailable() <= 0)
+        mIpcReader_.setCmdHandler<RecordCmd>([this](RecordCmd* cmd)->void
         {
-            return;
-        }
-        CmdHeader cmdHdr;
-        if (!mIpcChannel_->read((char*)&cmdHdr, sizeof(cmdHdr)))
+            std::unique_lock<std::mutex> lock(this->mMutex_);
+            this->mRecCmd_ = *cmd;   // 设置记录参数
+        });
+
+        mIpcReader_.setCmdHandler<FiltCmd>([this](FiltCmd* cmd)->void
         {
-            return;
-        }
-        switch (cmdHdr.id)
-        {
-        case CmdId::Rec:
-            if (RecordCmd cmd; mIpcChannel_->read((char*)&cmd, sizeof(cmd)))
+            std::unique_lock<std::mutex> lock(this->mMutex_);
+            this->mFiltCmd_ = *cmd;  // 设置滤波参数
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
             {
-                this->mRecCmd_ = cmd;   // 设置记录参数
+                mFilter_[i].setSampleFreqHz(cmd->sampleRate);
             }
-            break;
-        case CmdId::Filt:
-            if (FiltCmd cmd; mIpcChannel_->read((char*)&cmd, sizeof(cmd)))
-            {
-                this->mFiltCmd_ = cmd;  // 设置滤波参数
-                mFilter_->setSampleFreqHz(cmd.sampleRate);
-            }
-            break;
-        case CmdId::Shutdown:
+        });
+
+        mIpcReader_.setCmdHandler<ShutdownCmd>([this](ShutdownCmd* cmd)->void
+        {
             this->mIsStop_ = true;  // 退出本进程
-            break;
-        default:
-            break;
-        }
+        });
     }
 
     TestDataSampler::TestDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
