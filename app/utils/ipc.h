@@ -19,34 +19,18 @@ namespace eegneo
             template<typename Cmd>
             void setCmdHandler(std::function<void(Cmd*)> handler)
             {
-                auto handlerWrapper = [handler](EmptyCmd* baseCmd)->void
+                mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](EmptyCmd* baseCmd)->void
                 {
                     handler(static_cast<Cmd*>(baseCmd));
                 };
-                if constexpr (std::is_same_v<Cmd, RecordCmd>)
-                {
-                    mHandlers_[CmdId::Rec] = handlerWrapper;
-                }
-                else if constexpr (std::is_same_v<Cmd, FiltCmd>)
-                {
-                    mHandlers_[CmdId::Filt] = handlerWrapper;
-                }
-                else if constexpr (std::is_same_v<Cmd, ShutdownCmd>)
-                {
-                    mHandlers_[CmdId::Shutdown] = handlerWrapper;
-                }
-                else
-                {
-
-                }
             }
 
         private:
             QTcpSocket* mChannel_;
             std::unordered_map<CmdId, std::function<void(EmptyCmd*)>> mHandlers_;
 
-        private slots:
             void handleMsg();
+            bool readBytes(char* buf, std::uint16_t bytesLength);
         };
 
         class IpcWriter
@@ -58,22 +42,7 @@ namespace eegneo
             void sendCmd(const Cmd& cmd)
             {
                 CmdHeader hdr; 
-                if constexpr (std::is_same_v<Cmd, RecordCmd>)
-                {
-                    hdr.id = CmdId::Rec;
-                }
-                else if constexpr (std::is_same_v<Cmd, FiltCmd>)
-                {
-                    hdr.id = CmdId::Filt;
-                }
-                else if constexpr (std::is_same_v<Cmd, ShutdownCmd>)
-                {
-                    hdr.id = CmdId::Shutdown;
-                }
-                else
-                {
-                    hdr.id = CmdId::Invalid;
-                }
+                hdr.id = detail::CmdType2Id<Cmd>();
                 constexpr std::int64_t len = sizeof(hdr) + sizeof(cmd);
                 char buf[len] = {0};
                 ::memcpy(buf, (char*)&hdr, sizeof(hdr));

@@ -41,15 +41,12 @@ public:
     QString tempFile;
 
 signals:
-    void returnMain();
+    void closeAll();
 
 public slots:
     void receiveFilterInfo(double, double, int);
 
 private slots:
-    // 跳转到当前窗口
-    void receiveJump2Analysis() { this->show(); }
-
     void on_pushButton_clicked();
     void readDataFromLocal();  // 从本程序缓存文件读取数据
     void readEDF();  // 读取EDF/EDF+/BDF文件

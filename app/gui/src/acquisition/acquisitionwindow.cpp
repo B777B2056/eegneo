@@ -38,14 +38,12 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 {
     ui->setupUi(this);
     ui->label_5->setText("Off");    // 滤波指示信号初始化：未滤波
-    this->setSignalSlotConnect();
+    this->connectSignalAndSlot();
 }
 
 AcquisitionWindow::~AcquisitionWindow()
 {
-    mIpcWriter_->sendCmd(eegneo::ShutdownCmd{});
     delete mIpcWriter_;
-    mPlotTimer_->stop();
     delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mBuf_;
@@ -53,39 +51,7 @@ AcquisitionWindow::~AcquisitionWindow()
     delete ui;
 }
 
-void AcquisitionWindow::setSignalSlotConnect()
-{
-    // 信号与槽的链接：太尼玛恶心了，谁看谁傻逼
-    QObject::connect(ui->pushButton, SIGNAL(clicked()), this, SLOT(onPushButtonClicked()));
-    QObject::connect(ui->pushButton_2, SIGNAL(clicked()), this, SLOT(onPushButton2Clicked()));
-    QObject::connect(ui->pushButton_3, SIGNAL(clicked()), this, SLOT(onPushButton3Clicked()));
-    QObject::connect(ui->pushButton_4, SIGNAL(clicked()), this, SLOT(onPushButton4Clicked()));
-    QObject::connect(ui->pushButton_5, SIGNAL(clicked()), this, SLOT(onPushButton5Clicked()));
-
-    QObject::connect(ui->comboBox, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBoxCurrentTextChanged(const QString &)));
-    QObject::connect(ui->comboBox_2, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBox2CurrentTextChanged(const QString &)));
-    QObject::connect(ui->comboBox_3, SIGNAL(currentTextChanged(const QString &)), this, SLOT(onComboBox3CurrentTextChanged(const QString &)));
-
-    QObject::connect(ui->filter, SIGNAL(clicked()), this, SLOT(onFilterClicked()));
-
-    QObject::connect(ui->actionStart_Recording, SIGNAL(triggered()), this, SLOT(startRecording()));
-    QObject::connect(ui->actionEDF, SIGNAL(triggered()), this, SLOT(saveEdfPlus()));
-    QObject::connect(ui->actionTXT, SIGNAL(triggered()), this, SLOT(saveTxt()));
-    QObject::connect(ui->actionStop_Recording, SIGNAL(triggered()), this, SLOT(stopRecording()));
-    QObject::connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
-    QObject::connect(ui->action_10_10uV, SIGNAL(triggered()), this, SLOT(setVoltage10()));
-    QObject::connect(ui->action_25_25uV, SIGNAL(triggered()), this, SLOT(setVoltage25()));
-    QObject::connect(ui->action50uV, SIGNAL(triggered()), this, SLOT(setVoltage50()));
-    QObject::connect(ui->action100uV, SIGNAL(triggered()), this, SLOT(setVoltage100()));
-    QObject::connect(ui->action200uV, SIGNAL(triggered()), this, SLOT(setVoltage200()));
-    QObject::connect(ui->action_500_500uV, SIGNAL(triggered()), this, SLOT(setVoltage500()));
-    QObject::connect(ui->action_1000_1000uV, SIGNAL(triggered()), this, SLOT(setVoltage1000()));
-    QObject::connect(ui->action0_1s, SIGNAL(triggered()), this, SLOT(setTime1()));
-    QObject::connect(ui->action0_5s, SIGNAL(triggered()), this, SLOT(setTime5()));
-    QObject::connect(ui->action0_10s, SIGNAL(triggered()), this, SLOT(setTime10()));
-}
-
-void AcquisitionWindow::showParticipantInfoWindow()
+void AcquisitionWindow::start()
 {
     // 待用户输入基本信息
     SetInfo siw;
@@ -94,8 +60,10 @@ void AcquisitionWindow::showParticipantInfoWindow()
         this->mChannelNum_ = siw.channelNum();
         this->mSampleRate_ = siw.sampleRate();
         this->mFileName_ = siw.subjectNum() + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
+
         this->mBuf_ = new double[this->mChannelNum_];
-        this->mChart_ = new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
+        this->mChart_= new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
+
         this->mFiltCmd_.sampleRate = mSampleRate_;
         this->startDataSampler();
         this->initChart();
@@ -105,15 +73,158 @@ void AcquisitionWindow::showParticipantInfoWindow()
     }
     else
     {
-        emit returnMain();
+        emit closeAll();
     }
 }
 
-// 创建缓存TXT文件
-void AcquisitionWindow::startRecording()
+// 发送marker //
+void AcquisitionWindow::createMark(const QString& event)
 {
-    mRecCmd_.isRecordOn = true;
-    mIpcWriter_->sendCmd(mRecCmd_);
+    if(event.isNull() || event.isEmpty()) return;
+    mChart_->addOneMarkerLine(event);
+    // 将marker写入文件
+    if (mRecCmd_.isRecordOn)
+    {
+        eegneo::MarkerCmd cmd;
+        ::memcpy(cmd.msg, event.toStdString().data(), event.length());
+        mIpcWriter_->sendCmd(cmd);
+    }
+}
+
+void AcquisitionWindow::startDataSampler()
+{
+    QStringList args;
+    args << QString::number(mChannelNum_);
+    mDataSampler_.start("E:/jr/eegneo/build/app/sampler/Debug/eegneo_sampler.exe", args);
+    if (mDataSampler_.waitForStarted(-1))
+    {
+        IPC_WRITER_SOCKET.connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
+        if (IPC_WRITER_SOCKET.waitForConnected(-1))
+        {
+            mIpcWriter_ = new eegneo::utils::IpcWriter(&IPC_WRITER_SOCKET);
+            mSharedMemory_ = new QSharedMemory{"Sampler"};
+            while (!mSharedMemory_->attach());
+        }
+        else
+        {
+
+        }
+    }
+    else
+    {
+
+    }
+}
+
+void AcquisitionWindow::stopDataSampler()
+{
+    mIpcWriter_->sendCmd(eegneo::ShutdownCmd{});
+    IPC_WRITER_SOCKET.disconnectFromHost();
+    mDataSampler_.close();
+    mSharedMemory_->detach();
+}
+
+void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mChart_->setAxisYScale(0, mChannelNum_ * curMaxVoltage); }
+void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
+
+void AcquisitionWindow::initChart()
+{
+    ui->graphicsView->setChart(mChart_->chart());                                   
+
+    mChart_->setAxisXScale(eegneo::Second::FIVE);
+    mChart_->setAxisYScale(0, 10 * mChannelNum_);
+
+    QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); });
+    mPlotTimer_->start(GRAPH_FRESH);
+}
+
+// 波形更新
+void AcquisitionWindow::updateWave()
+{
+    if (!mSharedMemory_->lock()) return;
+    ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
+    if (!mSharedMemory_->unlock()) return;
+
+    mChart_->update(mBuf_);
+}
+
+// p300 Oddball范式
+void AcquisitionWindow::p300Oddball()
+{
+    // 弹窗提示用户本实验相关信息
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::information(this, tr("p300-oddball"),
+                                    "实验名称：P300诱发电位刺激\n"
+                                    "实验范式：Oddball\n"
+                                    "实验内容：数字2与数字8交替闪烁。",
+                                    QMessageBox::Ok);
+    if(reply == QMessageBox::Ok)
+    {
+        _fileInfo.isSaveP300BH = true;
+        // 进入实验
+        P300Oddball *p = new P300Oddball();
+        QObject::connect(p, &P300Oddball::sendImgNum, [this](int n)->void{ this->_p300OddballImgNum = n; });
+        QObject::connect(p, &P300Oddball::sendMark, [this](const QString& text)->void{ this->createMark(text); });
+        p->show();
+    }
+}
+
+// 信号与槽的链接
+void AcquisitionWindow::connectSignalAndSlot()
+{
+    QObject::connect(ui->filter, &QPushButton::clicked, [this]()->void
+    { 
+        bool isFilt = ((!mFiltCmd_.isFiltOn) && mFiltCmd_.isValid());
+        mFiltCmd_.isFiltOn = isFilt;  
+        mIpcWriter_->sendCmd(mFiltCmd_);    
+        ui->label_5->setText(isFilt ? "On" : "Off"); 
+    });
+
+    QObject::connect(ui->pushButton, &QPushButton::clicked, [this]()->void
+    {
+        if(!this->_fileInfo.isFinish)
+        {
+            QMessageBox::critical(this, tr("错误"), "数据正在写入文件", QMessageBox::Ok);
+        }
+        else
+        {
+            auto reply = QMessageBox::question(this, tr("通知"), "确定要退出吗？", QMessageBox::Ok | QMessageBox::No);
+            if (reply == QMessageBox::Ok)
+            {
+                this->hide();
+                this->stopDataSampler();
+                emit closeAll();
+            }
+        }
+    });
+
+    QObject::connect(ui->pushButton_2, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit->text()); });
+    QObject::connect(ui->pushButton_3, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit_2->text()); });
+    QObject::connect(ui->pushButton_4, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit_3->text()); });
+    QObject::connect(ui->pushButton_5, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit_4->text()); });
+
+    QObject::connect(ui->comboBox, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.lowCutoff = text.toDouble(); });
+    QObject::connect(ui->comboBox_2, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.highCutoff = text.toDouble(); });
+    QObject::connect(ui->comboBox_3, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.notchCutoff = text.toDouble(); });
+
+    QObject::connect(ui->actionStart_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = true; mIpcWriter_->sendCmd(mRecCmd_); });
+    QObject::connect(ui->actionStop_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = false; mIpcWriter_->sendCmd(mRecCmd_); });
+
+    QObject::connect(ui->actionEDF, SIGNAL(triggered()), this, SLOT(saveEdfPlus()));
+    QObject::connect(ui->actionTXT, SIGNAL(triggered()), this, SLOT(saveTxt()));
+    QObject::connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
+
+    QObject::connect(ui->action_10_10uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(10); });
+    QObject::connect(ui->action_25_25uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(25); });
+    QObject::connect(ui->action50uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(50); });
+    QObject::connect(ui->action100uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(100); });
+    QObject::connect(ui->action200uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(200); });
+    QObject::connect(ui->action_500_500uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(500); });
+    QObject::connect(ui->action_1000_1000uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(1000); });
+
+    QObject::connect(ui->action0_1s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(1); });
+    QObject::connect(ui->action0_5s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(5); });
+    QObject::connect(ui->action0_10s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(10); });
 }
 
 void AcquisitionWindow::setFilePath(int s, QString& path)
@@ -531,149 +642,4 @@ void AcquisitionWindow::saveBehavioralP300(std::string path)
             beh_file << "8.bmp" << std::endl;
     }
     beh_file.close();
-}
-
-// 发送marker //
-void AcquisitionWindow::createMark(const QString& event)
-{
-    if(event.isNull() || event.isEmpty()) return;
-    mChart_->addOneMarkerLine(event);
-    // 将marker写入文件
-    // if(_fileInfo.isRec)
-    // {
-    //     emit writeEvent(event);
-    //     _fileInfo.eventCount++;
-    // }
-}
-
-void AcquisitionWindow::startDataSampler()
-{
-    QStringList args;
-    args << QString::number(mChannelNum_);
-    mDataSampler_.start("E:/jr/eegneo/build/app/sampler/Debug/eegneo_sampler.exe", args);
-    if (mDataSampler_.waitForStarted(-1))
-    {
-        IPC_WRITER_SOCKET.connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
-        if (IPC_WRITER_SOCKET.waitForConnected(-1))
-        {
-            mIpcWriter_ = new eegneo::utils::IpcWriter(&IPC_WRITER_SOCKET);
-            mSharedMemory_ = new QSharedMemory{"Sampler"};
-            while (!mSharedMemory_->attach());
-        }
-        else
-        {
-
-        }
-    }
-    else
-    {
-
-    }
-}
-
-void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mChart_->setAxisYScale(0, mChannelNum_ * curMaxVoltage); }
-void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
-
-void AcquisitionWindow::initChart()
-{
-    ui->graphicsView->setChart(mChart_->chart());                                   
-
-    mChart_->setAxisXScale(eegneo::Second::FIVE);
-    mChart_->setAxisYScale(0, 10 * mChannelNum_);
-
-    QObject::connect(mPlotTimer_, SIGNAL(timeout()), this, SLOT(updateWave()));
-    mPlotTimer_->start(GRAPH_FRESH);
-}
-
-// 波形更新
-void AcquisitionWindow::updateWave()
-{
-    if (!mSharedMemory_->lock()) return;
-    ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
-    if (!mSharedMemory_->unlock()) return;
-
-    mChart_->update(mBuf_);
-}
-
-// 数据获取
-// void AcquisitionWindow::receiveData(std::vector<double> vec)
-// {
-//     _waveDrawingInfo.graphData = vec;
-//     if(_fileInfo.isRec)
-//     {
-//         _fileInfo.curLine++;
-//     }
-// }
-
-// 停止写入数据并保存缓存txt文件
-void AcquisitionWindow::stopRecording()
-{   
-    mRecCmd_.isRecordOn = false;
-    mIpcWriter_->sendCmd(mRecCmd_);
-}
-
-// p300 Oddball范式
-void AcquisitionWindow::p300Oddball()
-{
-    // 弹窗提示用户本实验相关信息
-    QMessageBox::StandardButton reply;
-    reply = QMessageBox::information(this, tr("p300-oddball"),
-                                    "实验名称：P300诱发电位刺激\n"
-                                    "实验范式：Oddball\n"
-                                    "实验内容：数字2与数字8交替闪烁。",
-                                    QMessageBox::Ok);
-    if(reply == QMessageBox::Ok)
-    {
-        _fileInfo.isSaveP300BH = true;
-        // 进入实验
-        P300Oddball *p = new P300Oddball();
-        QObject::connect(p, SIGNAL(sendImgNum(int)), this, SLOT(getImgNum(int)));
-        QObject::connect(p, SIGNAL(sendMark(const QString&)), this, SLOT(createMark(const QString&)));
-        p->show();
-    }
-}
-
-void AcquisitionWindow::onPushButtonClicked()
-{
-    if(!this->_fileInfo.isFinish)
-    {
-        QMessageBox::critical(this, tr("错误"), "数据正在写入文件", QMessageBox::Ok);
-    }
-    else
-    {
-        /*返回开始界面*/
-        this->hide();
-        emit returnMain();
-    }
-}
-
-void AcquisitionWindow::onPushButton2Clicked() { this->createMark(ui->lineEdit->text()); }
-void AcquisitionWindow::onPushButton3Clicked() { this->createMark(ui->lineEdit_2->text()); }
-void AcquisitionWindow::onPushButton4Clicked() { this->createMark(ui->lineEdit_3->text()); }
-void AcquisitionWindow::onPushButton5Clicked() { this->createMark(ui->lineEdit_4->text()); }
-void AcquisitionWindow::onComboBoxCurrentTextChanged(const QString &text) { mFiltCmd_.lowCutoff = text.toDouble(); }
-void AcquisitionWindow::onComboBox2CurrentTextChanged(const QString &text) { mFiltCmd_.highCutoff = text.toDouble(); }
-void AcquisitionWindow::onComboBox3CurrentTextChanged(const QString &text) { mFiltCmd_.notchCutoff = text.toDouble(); }
-
-// 按了"滤波"按钮后开始滤波，再按一次取消滤波
-void AcquisitionWindow::onFilterClicked()
-{
-    if (!mFiltCmd_.isFiltOn)
-    {
-        if((mFiltCmd_.lowCutoff > 0.0) || (mFiltCmd_.highCutoff > 0.0) || (mFiltCmd_.notchCutoff > 0.0))
-        {   
-            mFiltCmd_.isFiltOn = true;
-            mIpcWriter_->sendCmd(mFiltCmd_);
-
-            ui->label_5->setText("On");
-        }
-    }
-    else
-    {
-
-        mFiltCmd_.isFiltOn = false;
-        mIpcWriter_->sendCmd(mFiltCmd_);
-
-        ui->label_5->setText("Off");
-    }
 }

@@ -5,15 +5,15 @@
 
 int main(int argc, char *argv[])
 {   
-    QApplication a(argc, argv);
+    QApplication app(argc, argv);
     MainWindow m;
     AcquisitionWindow acq(&m);
-    QObject::connect(&m, SIGNAL(covert2Accquisition()), &acq, SLOT(receiveJump2Accquisition()));
-    QObject::connect(&acq, SIGNAL(returnMain()), &m, SLOT(covert2InitWindowImpl()));
+    QObject::connect(&m, &MainWindow::covert2Accquisition, [&acq]()->void{ acq.start(); });
+    QObject::connect(&acq, &AcquisitionWindow::closeAll, [&app]()->void{ app.exit(); });
     PreprocessWindow pre(&m);
-    QObject::connect(&pre, SIGNAL(returnMain()), &m, SLOT(covert2InitWindowImpl()));
-    QObject::connect(&m, SIGNAL(covert2Analysis()), &pre, SLOT(receiveJump2Analysis()));
+    QObject::connect(&pre, &PreprocessWindow::closeAll, [&app]()->void{ app.exit(); });
+    QObject::connect(&m, &MainWindow::covert2Analysis, [&pre]()->void{ pre.show(); });
     m.show();
-    return a.exec();
+    return app.exec();
 }
 

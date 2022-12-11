@@ -39,22 +39,26 @@ class AcquisitionWindow : public QMainWindow
 public:
     AcquisitionWindow(QWidget *parent = nullptr);
     ~AcquisitionWindow();
+    // 显示信息输入窗口并启动数据采集进程
+    void start();
 
 private:
-    // 开始数据采集与记录进程
+    // 启动数据采集
     void startDataSampler();
+    // 停止数据采集
+    void stopDataSampler();
     // 创建Marker
     void createMark(const QString& event);
+    // 更新波形显示
+    void updateWave();
     // 设置Y轴范围
     void setVoltageAxisScale(int curMaxVoltage);
     // 设置X轴范围
     void setTimeAxisScale(std::int8_t t);
     // 绘图初始化
     void initChart();
-    // 显示被试信息输入窗口
-    void showParticipantInfoWindow();
     // 设置信号与槽的连接关系
-    void setSignalSlotConnect();
+    void connectSignalAndSlot();
     // 数据文件保存
     void setFilePath(int s, QString& path);
     // 保存行为学数据
@@ -83,51 +87,14 @@ private:
 
     /* 信号 */
 signals:
-    void returnMain();// 返回主界面
-    void doRec();    // 开始记录
-    void writeEvent(std::string);   // 记录事件
-    void doneRec(); // 停止记录
+    void closeAll();// 返回主界面
 
     /* 槽 */
 private slots:
-    // 更新波形显示
-    void updateWave();
-    // 创建缓存的TXT文件后开始记录数据
-    void startRecording();
-    // 停止写入数据并保存缓存txt文件
-    void stopRecording();
     // 保存为EDF+文件
     void saveEdfPlus();
     // 保存为3个txt文档（样本数据点，事件信息，描述文档）
     void saveTxt();
     // oddball范式p300实验
     void p300Oddball();
-    // 跳转到当前窗口
-    void receiveJump2Accquisition() { this->showParticipantInfoWindow(); }
-    // 返回主界面
-    void onPushButtonClicked();
-    // Marker
-    void onPushButton2Clicked();
-    void onPushButton3Clicked();
-    void onPushButton4Clicked();
-    void onPushButton5Clicked();
-    void onComboBoxCurrentTextChanged(const QString &text);
-    void onComboBox2CurrentTextChanged(const QString &text);
-    void onComboBox3CurrentTextChanged(const QString &text);
-    // 触发滤波
-    void onFilterClicked();
-    // 接收P300-Oddball实验图片总数量
-    void getImgNum(int n) { _p300OddballImgNum = n; }
-    // 设置各电导电压范围（单位：uV）
-    void setVoltage10() { this->setVoltageAxisScale(10); }
-    void setVoltage25() { this->setVoltageAxisScale(25); }
-    void setVoltage50() { this->setVoltageAxisScale(50); }
-    void setVoltage100() { this->setVoltageAxisScale(100); }
-    void setVoltage200() { this->setVoltageAxisScale(200); }
-    void setVoltage500() { this->setVoltageAxisScale(500); }
-    void setVoltage1000() { this->setVoltageAxisScale(1000); }
-    // 设置时间轴范围（单位：s）
-    void setTime1() { this->setTimeAxisScale(1); }
-    void setTime5() { this->setTimeAxisScale(5); }
-    void setTime10() { this->setTimeAxisScale(10); }
 };

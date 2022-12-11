@@ -2,12 +2,11 @@
 #include <atomic>
 #include <fstream>
 #include <mutex>
-#include <thread>
 #include <QSerialPort>
 #include <QString>
 #include <QSharedMemory>
 #include <QUdpSocket>
-#include "utils/ipc.h"
+#include "common/common.h"
 
 class QTcpSocket;
 
@@ -15,17 +14,22 @@ namespace eegneo
 {
     namespace utils { class Filter; }
 
-    class DataSampler
+    class EEGDataSampler
     {
     public:
-        DataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
-        DataSampler(const DataSampler&) = delete;
-        DataSampler& operator=(const DataSampler&) = delete;
-        DataSampler(DataSampler&&) = default;
-        DataSampler& operator=(DataSampler&&) = default;
-        virtual ~DataSampler();
+        EEGDataSampler(std::size_t channelNum);
+        EEGDataSampler(const EEGDataSampler&) = delete;
+        EEGDataSampler& operator=(const EEGDataSampler&) = delete;
+        EEGDataSampler(EEGDataSampler&&) = default;
+        EEGDataSampler& operator=(EEGDataSampler&&) = default;
+        virtual ~EEGDataSampler();
 
         void start();
+
+        void handleRecordCmd(RecordCmd* cmd);
+        void handleFiltCmd(FiltCmd* cmd);
+        void handleShutdownCmd(ShutdownCmd* cmd);
+        void handleMarkerCmd(MarkerCmd* cmd);
 
     protected:
         double* mBuf_;
@@ -33,29 +37,28 @@ namespace eegneo
         virtual void doSample() = 0;
 
     private:
-        utils::IpcReader mIpcReader_;
-        std::fstream mRecordFile_;
+        std::uint64_t mCurDataN_;
+        std::fstream mDataFile_, mEventFile_;
+
         QSharedMemory mSharedMemory_;
+
         RecordCmd mRecCmd_;
         FiltCmd mFiltCmd_;
         
         std::mutex mMutex_;
         std::atomic_bool mIsStop_;
-        std::thread mProcessThread_;
 
         utils::Filter* mFilter_;
         double* mFiltBuf_;
 
         void doRecord();
         void doFilt();
-
-        void setIpcCallback();
     };
 
-    class TestDataSampler : public DataSampler
+    class TestDataSampler : public EEGDataSampler
     {
     public:
-        TestDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
+        TestDataSampler(std::size_t channelNum);
         ~TestDataSampler() = default;
 
     private:
@@ -65,10 +68,10 @@ namespace eegneo
         // const char* DATA_FILE_PATH = "";
     };
 
-    class ShanghaiDataSampler : public DataSampler
+    class ShanghaiDataSampler : public EEGDataSampler
     {
     public:
-        ShanghaiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel, const QString& portName);
+        ShanghaiDataSampler(std::size_t channelNum, const QString& portName);
         ~ShanghaiDataSampler();
 
     private:
@@ -85,10 +88,10 @@ namespace eegneo
         static constexpr double MAGIC_COFF = 0.022351744455307063;
     };
 
-    class ShanxiDataSampler : public DataSampler
+    class ShanxiDataSampler : public EEGDataSampler
     {
     public:
-        ShanxiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel);
+        ShanxiDataSampler(std::size_t channelNum);
         ~ShanxiDataSampler() = default;
 
     private:

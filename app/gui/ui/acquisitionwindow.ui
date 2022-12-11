@@ -356,7 +356,7 @@
            </size>
           </property>
           <property name="text">
-           <string>返回</string>
+           <string>退出</string>
           </property>
          </widget>
         </item>

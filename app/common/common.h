@@ -13,9 +13,10 @@ namespace eegneo
     enum class CmdId : std::uint8_t
     {
         Invalid = 0,
-        Rec,
+        Record,
         Filt,
-        Shutdown
+        Shutdown,
+        Marker
     };
 
     struct CmdHeader
@@ -37,6 +38,8 @@ namespace eegneo
         double lowCutoff = -1.0;  
         double highCutoff = -1.0; 
         double notchCutoff = -1.0; 
+
+        bool isValid() const { return (sampleRate > 0) && ((lowCutoff > 0.0) || (highCutoff > 0.0) || (notchCutoff > 0.0)); }
     };
 
     struct ShutdownCmd : public EmptyCmd
@@ -44,5 +47,40 @@ namespace eegneo
 
     };
 
+    struct MarkerCmd : public EmptyCmd
+    {
+        char msg[1024];
+
+        MarkerCmd() { ::memset(msg, 0, 1024); }
+    };
+
 #pragma pack(pop)
+
+    namespace detail
+    {
+        template<typename Cmd>
+        CmdId CmdType2Id()
+        {
+            if constexpr (std::is_same_v<Cmd, RecordCmd>)
+            {
+                return CmdId::Record;
+            }
+            else if constexpr (std::is_same_v<Cmd, FiltCmd>)
+            {
+                return CmdId::Filt;
+            }
+            else if constexpr (std::is_same_v<Cmd, ShutdownCmd>)
+            {
+                return CmdId::Shutdown;
+            }
+            else if constexpr (std::is_same_v<Cmd, MarkerCmd>)
+            {
+                return CmdId::Marker;
+            }
+            else
+            {
+                return CmdId::Invalid;
+            }
+        }
+    }   // namespace detail
 }   // namespace eegneo

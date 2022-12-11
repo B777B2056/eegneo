@@ -4,8 +4,7 @@
 namespace eegneo
 {
     WavePlotImpl::WavePlotImpl(std::size_t n, std::size_t sampleRate, std::size_t freshMs)
-        : mLineSeriesNum_(n)
-        , mSampleRate_(sampleRate)
+        : mSampleRate_(sampleRate)
         , mFreshRate_((1000.0 / freshMs))
         , mMoveOffset_((double)sampleRate / mFreshRate_)
         , mXRange_(Second::INVALID)
@@ -25,7 +24,7 @@ namespace eegneo
         mAxisX_.setTickCount(5);
         mAxisY_.setTickCount(static_cast<int>(n));
 
-        for (std::size_t i = 0; i < n; ++i)
+        for (int i = 0; i < mData_.size(); ++i)
         {
             this->addOneLineSeries(&mLineSeries_[i]);
         }
@@ -33,7 +32,7 @@ namespace eegneo
 
     WavePlotImpl::~WavePlotImpl()
     {
-        delete[] mLineSeries_;
+        // delete[] mLineSeries_;
     }
 
     void WavePlotImpl::addOneLineSeries(QLineSeries* line)
@@ -48,7 +47,7 @@ namespace eegneo
     {
         if(static_cast<std::size_t>(mData_[0].size()) >= (mFreshRate_ * static_cast<std::size_t>(this->mXRange_)))
         {
-            for (int i = 0; i < mLineSeriesNum_; ++i)
+            for (int i = 0; i < mData_.size(); ++i)
             {
                 mData_[i].pop_front();
                 for (QPointF& point : mData_[i])
@@ -57,9 +56,10 @@ namespace eegneo
                 }
             }
         }
-        for (int i = 0; i < mLineSeriesNum_; ++i)
+
+        for (int i = 0; i < mData_.size(); ++i)
         {
-            mData_[i].emplace_back(mData_[0].size() * mMoveOffset_, data[i] + ((mAxisY_.max() - mAxisY_.min()) / mLineSeriesNum_) * i);
+            mData_[i].emplace_back(mData_[0].size() * mMoveOffset_, data[i] + ((mAxisY_.max() - mAxisY_.min()) / mData_.size()) * i);
             mLineSeries_[i].replace(mData_[i]);
         }
     }

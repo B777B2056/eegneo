@@ -7,14 +7,17 @@
 
 namespace eegneo
 {
-    constexpr const char* RECORD_FILE_PATH = "E:/jr/eegneo/temp.txt";
+    constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";
+    constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";
 
-    DataSampler::DataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
-        : mBuf_(new double[channelNum]), mChannelNum_(channelNum), mIpcReader_(ipcChannel)
-        , mRecordFile_{RECORD_FILE_PATH, std::ios::out}, mSharedMemory_{"Sampler"}, mIsStop_(false)
-        , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum]), mProcessThread_{&DataSampler::start, this}
+    EEGDataSampler::EEGDataSampler(std::size_t channelNum)
+        : mBuf_(new double[channelNum]), mChannelNum_(channelNum)
+        , mCurDataN_(0)
+        , mDataFile_{DATA_FILE_PATH, std::ios::out}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
+        , mSharedMemory_{"Sampler"}, mIsStop_(false)
+        , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
     {
-        if (!mRecordFile_.is_open())
+        if (!mDataFile_.is_open())
         {
             // TODO: 文件创建失败，处理
         }
@@ -26,27 +29,21 @@ namespace eegneo
         {
             throw "Shared memory create failed!";
         }
-        this->setIpcCallback();
     }
 
-    DataSampler::~DataSampler()
+    EEGDataSampler::~EEGDataSampler()
     {
-        if (mProcessThread_.joinable())
-        {
-            mProcessThread_.join();
-        }
-
         delete[] mBuf_;
         delete[] mFiltBuf_;
         delete[] mFilter_;
     }
 
-    void DataSampler::start()
+    void EEGDataSampler::start()
     {
         while (!mIsStop_)
         {
             std::unique_lock<std::mutex> lock(mMutex_);
-            this->doSample();
+            this->doSample(); 
             if (mRecCmd_.isRecordOn) this->doRecord();
             if (mFiltCmd_.isFiltOn) this->doFilt();
 
@@ -63,16 +60,17 @@ namespace eegneo
         }
     }
 
-    void DataSampler::doRecord()
+    void EEGDataSampler::doRecord()
     {
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            mRecordFile_ << mBuf_[i] << " ";
+            mDataFile_ << mBuf_[i] << " ";
         }
-        mRecordFile_ << "\n";
+        mDataFile_ << "\n";
+        ++mCurDataN_;
     }
 
-    void DataSampler::doFilt()
+    void EEGDataSampler::doFilt()
     {
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
@@ -102,32 +100,35 @@ namespace eegneo
         }
     }
 
-    void DataSampler::setIpcCallback()
+    void EEGDataSampler::handleRecordCmd(RecordCmd* cmd)
     {
-        mIpcReader_.setCmdHandler<RecordCmd>([this](RecordCmd* cmd)->void
-        {
-            std::unique_lock<std::mutex> lock(this->mMutex_);
-            this->mRecCmd_ = *cmd;   // 设置记录参数
-        });
-
-        mIpcReader_.setCmdHandler<FiltCmd>([this](FiltCmd* cmd)->void
-        {
-            std::unique_lock<std::mutex> lock(this->mMutex_);
-            this->mFiltCmd_ = *cmd;  // 设置滤波参数
-            for (std::size_t i = 0; i < mChannelNum_; ++i)
-            {
-                mFilter_[i].setSampleFreqHz(cmd->sampleRate);
-            }
-        });
-
-        mIpcReader_.setCmdHandler<ShutdownCmd>([this](ShutdownCmd* cmd)->void
-        {
-            this->mIsStop_ = true;  // 退出本进程
-        });
+        std::unique_lock<std::mutex> lock(this->mMutex_);
+        this->mRecCmd_ = *cmd;   // 设置记录参数
     }
 
-    TestDataSampler::TestDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
-        : DataSampler(channelNum, ipcChannel)
+    void EEGDataSampler::handleFiltCmd(FiltCmd* cmd)
+    {
+        std::unique_lock<std::mutex> lock(this->mMutex_);
+        this->mFiltCmd_ = *cmd;  // 设置滤波参数
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mFilter_[i].setSampleFreqHz(cmd->sampleRate);
+        }
+    }
+
+    void EEGDataSampler::handleShutdownCmd(ShutdownCmd* cmd)
+    {
+        this->mIsStop_ = true;  // 停止采集
+    }
+
+    void EEGDataSampler::handleMarkerCmd(MarkerCmd* cmd)
+    {
+        std::unique_lock<std::mutex> lock(this->mMutex_);
+        this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
+    }
+
+    TestDataSampler::TestDataSampler(std::size_t channelNum)
+        : EEGDataSampler(channelNum)
         // , mDataFile_{DATA_FILE_PATH, std::ios::in}
     {
         // if (!mDataFile_.is_open())
@@ -150,8 +151,8 @@ namespace eegneo
         serialPort.flush();
     }
 
-    ShanghaiDataSampler::ShanghaiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel, const QString& portName)
-        : DataSampler(channelNum, ipcChannel)
+    ShanghaiDataSampler::ShanghaiDataSampler(std::size_t channelNum, const QString& portName)
+        : EEGDataSampler(channelNum)
         , mPortName_(portName)
     {
         this->initSerialPort();
@@ -274,8 +275,8 @@ namespace eegneo
         return (double)target * MAGIC_COFF;
     }
 
-    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum, QTcpSocket* ipcChannel)
-        : DataSampler(channelNum, ipcChannel)
+    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
+        : EEGDataSampler(channelNum)
     {
         client.bind(QHostAddress::LocalHost, 4000);
     }

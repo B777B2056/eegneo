@@ -27,7 +27,10 @@ namespace eegneo
     class WavePlotImpl
     {
     public:
+        WavePlotImpl() = default;
         WavePlotImpl(std::size_t n, std::size_t sampleRate, std::size_t freshMs);
+        WavePlotImpl(WavePlotImpl&&) = default;
+        WavePlotImpl& operator=(WavePlotImpl&&) = default;
         virtual ~WavePlotImpl();
 
         virtual void update(double* data);
@@ -38,7 +41,6 @@ namespace eegneo
         void setAxisYScale(qreal yMin, qreal yMax);
 
     protected:
-        std::size_t mLineSeriesNum_;
         std::size_t mSampleRate_;
         std::size_t mFreshRate_;
         qreal mMoveOffset_;
@@ -56,6 +58,7 @@ namespace eegneo
     class EEGWavePlotImpl : public WavePlotImpl
     {
     public:
+        EEGWavePlotImpl() = default;
         EEGWavePlotImpl(std::size_t channelNum, std::size_t sampleRate, std::size_t freshMs);
         ~EEGWavePlotImpl();
 

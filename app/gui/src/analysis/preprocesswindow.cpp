@@ -630,7 +630,7 @@ void PreprocessWindow::on_comboBox_2_currentIndexChanged(int index)
 
 void PreprocessWindow::on_pushButton_clicked()
 {
-    emit returnMain();
+    emit closeAll();
 }
 
 void PreprocessWindow::on_pushButton_2_clicked()

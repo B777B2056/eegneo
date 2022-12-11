@@ -6,8 +6,8 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    QObject::connect(ui->AccquisitionButton, SIGNAL(clicked()), this, SLOT(covert2AccquisitionImpl()));
-    QObject::connect(ui->AnalysisButton, SIGNAL(clicked()), this, SLOT(covert2AnalysisImpl()));
+    QObject::connect(ui->AccquisitionButton, &QPushButton::clicked, [this]()->void{ this->covert2AccquisitionImpl(); });
+    QObject::connect(ui->AnalysisButton, &QPushButton::clicked, [this]()->void{ this->covert2AnalysisImpl(); });
     /*设置界面背景色*/
     QPalette palette(this->palette());
     palette.setColor(QPalette::Window, Qt::white);
@@ -30,9 +30,4 @@ void MainWindow::covert2AnalysisImpl()
 {
     this->hide();
     emit covert2Analysis();
-}
-
-void MainWindow::covert2InitWindowImpl()
-{
-    this->show();
 }
