@@ -68,7 +68,7 @@ private:
     QString mFileName_;
     std::size_t mSampleRate_; 
     std::size_t mChannelNum_;
-    QProcess mDataSampler_;
+    QProcess mBackend_;
     // 绘图相关
     QTimer* mPlotTimer_;
     double* mBuf_;

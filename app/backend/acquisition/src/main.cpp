@@ -3,7 +3,7 @@
 #include <QTcpSocket>
 #include <string>
 #include <thread>
-#include "sampler.h"
+#include "backend.h"
 #include "utils/ipc.h"
 
 
@@ -24,14 +24,14 @@ int main(int argc, char* argv[])
     std::size_t channelNum = std::stoull(argv[1]);
     std::thread processThread{[channelNum, &ipcReader]()->void
     {
-        eegneo::TestDataSampler sampler{channelNum};
+        eegneo::AcquisitionBackend backend{channelNum};
 
-        ipcReader.setCmdHandler<eegneo::RecordCmd>([&sampler](eegneo::RecordCmd* cmd)->void{ sampler.handleRecordCmd(cmd); });
-        ipcReader.setCmdHandler<eegneo::FiltCmd>([&sampler](eegneo::FiltCmd* cmd)->void{ sampler.handleFiltCmd(cmd); });
-        ipcReader.setCmdHandler<eegneo::ShutdownCmd>([&sampler](eegneo::ShutdownCmd* cmd)->void{ sampler.handleShutdownCmd(cmd); });
-        ipcReader.setCmdHandler<eegneo::MarkerCmd>([&sampler](eegneo::MarkerCmd* cmd)->void{ sampler.handleMarkerCmd(cmd); });
+        ipcReader.setCmdHandler<eegneo::RecordCmd>([&backend](eegneo::RecordCmd* cmd)->void{ backend.handleRecordCmd(cmd); });
+        ipcReader.setCmdHandler<eegneo::FiltCmd>([&backend](eegneo::FiltCmd* cmd)->void{ backend.handleFiltCmd(cmd); });
+        ipcReader.setCmdHandler<eegneo::ShutdownCmd>([&backend](eegneo::ShutdownCmd* cmd)->void{ backend.handleShutdownCmd(cmd); });
+        ipcReader.setCmdHandler<eegneo::MarkerCmd>([&backend](eegneo::MarkerCmd* cmd)->void{ backend.handleMarkerCmd(cmd); });
 
-        sampler.start();
+        backend.start();
     }};
     
     return app.exec();;

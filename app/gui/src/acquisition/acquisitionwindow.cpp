@@ -1,6 +1,5 @@
 ﻿#include "acquisition/acquisitionwindow.h"
 #include "ui_acquisitionwindow.h"
-#include "ui_charthelp.h"
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QDateTime>
@@ -28,6 +27,7 @@ extern "C"
 namespace
 {
     static QTcpSocket IPC_WRITER_SOCKET;
+    constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe";
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
@@ -58,13 +58,12 @@ void AcquisitionWindow::start()
     if(int rec = siw.exec(); QDialog::Accepted == rec)
     {
         this->mChannelNum_ = siw.channelNum();
-        this->mSampleRate_ = siw.sampleRate();
-        this->mFileName_ = siw.subjectNum() + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
+        this->mFiltCmd_.sampleRate = this->mSampleRate_ = siw.sampleRate();
+        this->mFileName_ = siw.subjectNum() + "_" + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
 
         this->mBuf_ = new double[this->mChannelNum_];
         this->mChart_= new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
 
-        this->mFiltCmd_.sampleRate = mSampleRate_;
         this->startDataSampler();
         this->initChart();
         this->show();
@@ -77,7 +76,7 @@ void AcquisitionWindow::start()
     }
 }
 
-// 发送marker //
+// 发送marker
 void AcquisitionWindow::createMark(const QString& event)
 {
     if(event.isNull() || event.isEmpty()) return;
@@ -95,8 +94,8 @@ void AcquisitionWindow::startDataSampler()
 {
     QStringList args;
     args << QString::number(mChannelNum_);
-    mDataSampler_.start("E:/jr/eegneo/build/app/sampler/Debug/eegneo_sampler.exe", args);
-    if (mDataSampler_.waitForStarted(-1))
+    mBackend_.start(BACKEND_PATH, args);
+    if (mBackend_.waitForStarted(-1))
     {
         IPC_WRITER_SOCKET.connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
         if (IPC_WRITER_SOCKET.waitForConnected(-1))
@@ -120,7 +119,7 @@ void AcquisitionWindow::stopDataSampler()
 {
     mIpcWriter_->sendCmd(eegneo::ShutdownCmd{});
     IPC_WRITER_SOCKET.disconnectFromHost();
-    mDataSampler_.close();
+    mBackend_.close();
     mSharedMemory_->detach();
 }
 
@@ -191,8 +190,8 @@ void AcquisitionWindow::connectSignalAndSlot()
             auto reply = QMessageBox::question(this, tr("通知"), "确定要退出吗？", QMessageBox::Ok | QMessageBox::No);
             if (reply == QMessageBox::Ok)
             {
-                this->hide();
                 this->stopDataSampler();
+                this->hide();
                 emit closeAll();
             }
         }

@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <QByteArray>
 #include <QTcpSocket>
-#include "utils/filter.h"
 
 namespace eegneo
 {
@@ -12,119 +11,8 @@ namespace eegneo
 
     EEGDataSampler::EEGDataSampler(std::size_t channelNum)
         : mBuf_(new double[channelNum]), mChannelNum_(channelNum)
-        , mCurDataN_(0)
-        , mDataFile_{DATA_FILE_PATH, std::ios::out}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
-        , mSharedMemory_{"Sampler"}, mIsStop_(false)
-        , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
     {
-        if (!mDataFile_.is_open())
-        {
-            // TODO: 文件创建失败，处理
-        }
-        if (mSharedMemory_.attach())
-        {
-            mSharedMemory_.detach();
-        }
-        if (!mSharedMemory_.create(mChannelNum_ * sizeof(double)))
-        {
-            throw "Shared memory create failed!";
-        }
-    }
-
-    EEGDataSampler::~EEGDataSampler()
-    {
-        delete[] mBuf_;
-        delete[] mFiltBuf_;
-        delete[] mFilter_;
-    }
-
-    void EEGDataSampler::start()
-    {
-        while (!mIsStop_)
-        {
-            std::unique_lock<std::mutex> lock(mMutex_);
-            this->doSample(); 
-            if (mRecCmd_.isRecordOn) this->doRecord();
-            if (mFiltCmd_.isFiltOn) this->doFilt();
-
-            if (!mSharedMemory_.lock()) continue;
-            if (mFiltCmd_.isFiltOn)
-            {
-                ::memcpy(mSharedMemory_.data(), mFiltBuf_, mChannelNum_ * sizeof(double));
-            }
-            else
-            {
-                ::memcpy(mSharedMemory_.data(), mBuf_, mChannelNum_ * sizeof(double));
-            }
-            if (!mSharedMemory_.unlock()) continue;
-        }
-    }
-
-    void EEGDataSampler::doRecord()
-    {
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mDataFile_ << mBuf_[i] << " ";
-        }
-        mDataFile_ << "\n";
-        ++mCurDataN_;
-    }
-
-    void EEGDataSampler::doFilt()
-    {
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            double afterFiltData = -1.0;
-            mFilter_[i].appendData(mBuf_[i]);
-            if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
-            {
-                afterFiltData = mFilter_[i].lowPass(mFiltCmd_.lowCutoff);
-            }
-            else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
-            {
-                afterFiltData = mFilter_[i].highPass(mFiltCmd_.highCutoff);
-            }
-            else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
-            {
-                afterFiltData = mFilter_[i].bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
-            }
-            else    // 无滤波
-            {
-                afterFiltData = mBuf_[i];
-            }
-            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
-            {
-                afterFiltData = mFilter_[i].notch(mFiltCmd_.notchCutoff);
-            }
-            mFiltBuf_[i] = afterFiltData;
-        }
-    }
-
-    void EEGDataSampler::handleRecordCmd(RecordCmd* cmd)
-    {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
-        this->mRecCmd_ = *cmd;   // 设置记录参数
-    }
-
-    void EEGDataSampler::handleFiltCmd(FiltCmd* cmd)
-    {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
-        this->mFiltCmd_ = *cmd;  // 设置滤波参数
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mFilter_[i].setSampleFreqHz(cmd->sampleRate);
-        }
-    }
-
-    void EEGDataSampler::handleShutdownCmd(ShutdownCmd* cmd)
-    {
-        this->mIsStop_ = true;  // 停止采集
-    }
-
-    void EEGDataSampler::handleMarkerCmd(MarkerCmd* cmd)
-    {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
-        this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
+        
     }
 
     TestDataSampler::TestDataSampler(std::size_t channelNum)
@@ -137,7 +25,7 @@ namespace eegneo
         // }
     }
 
-    void TestDataSampler::doSample()
+    void TestDataSampler::sampleOnce()
     {
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
@@ -168,7 +56,7 @@ namespace eegneo
         mSerialPort_.close();
     }
 
-    void ShanghaiDataSampler::doSample()
+    void ShanghaiDataSampler::sampleOnce()
     {
         if (!mSerialPort_.isOpen())
         {
@@ -281,7 +169,7 @@ namespace eegneo
         client.bind(QHostAddress::LocalHost, 4000);
     }
 
-    void ShanxiDataSampler::doSample()
+    void ShanxiDataSampler::sampleOnce()
     {
         while(!client.hasPendingDatagrams());
         char bytes[72];

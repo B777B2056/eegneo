@@ -1,6 +1,5 @@
 ﻿#pragma once
-#include "third/dsp/dsp_filter.hpp"
-#include "third/dsp/dsp_window_functions.hpp"
+#include "third/dsp/dsp.hpp"
 
 namespace eegneo
 {
