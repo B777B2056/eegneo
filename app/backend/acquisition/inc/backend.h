@@ -8,7 +8,7 @@
 namespace eegneo
 {
     class EEGDataSampler;
-    namespace utils { class Filter; }
+    namespace utils { class Filter; class FFTCalculator; }
 
     class AcquisitionBackend
     {
@@ -31,22 +31,21 @@ namespace eegneo
         EEGDataSampler* mDataSampler_;
         std::size_t mChannelNum_;
 
-        std::uint64_t mCurDataN_;
-        std::fstream mDataFile_, mEventFile_;
+        std::uint64_t mCurDataN_; std::fstream mDataFile_, mEventFile_;
 
         QSharedMemory mSharedMemory_;
 
-        RecordCmd mRecCmd_;
-        FiltCmd mFiltCmd_;
+        RecordCmd mRecCmd_; FiltCmd mFiltCmd_;
         
-        std::mutex mMutex_;
-        std::atomic_bool mIsStop_;
+        std::mutex mMutex_; std::atomic_bool mIsStop_;
 
-        utils::Filter* mFilter_;
-        double* mFiltBuf_;
+        utils::Filter* mFilter_; double* mFiltBuf_;
+
+        utils::FFTCalculator* mFFT_;
 
         void doSample();
         void doRecord();
         void doFilt();
+        void doFFT();
     };
 }   // namespace eegneo

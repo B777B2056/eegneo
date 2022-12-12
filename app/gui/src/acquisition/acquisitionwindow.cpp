@@ -32,8 +32,9 @@ namespace
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
-    , mSampleRate_(0), mChannelNum_(0), mIpcWriter_(nullptr)
-    , mPlotTimer_(new QTimer(this)), mSharedMemory_(nullptr), mChart_(nullptr)
+    , mSampleRate_(0), mChannelNum_(0)
+    , mWavePlotTimer_(new QTimer(this))
+    , mFFTPlotTimer_(new QTimer(this))
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
@@ -44,10 +45,11 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 AcquisitionWindow::~AcquisitionWindow()
 {
     delete mIpcWriter_;
-    delete mPlotTimer_;
+    delete mWavePlotTimer_;
+    delete mFFTPlotTimer_;
     delete mSharedMemory_;
-    delete[] mBuf_;
-    delete mChart_;
+    delete[] mSignalBuf_;
+    delete mSignalChart_;
     delete ui;
 }
 
@@ -61,11 +63,16 @@ void AcquisitionWindow::start()
         this->mFiltCmd_.sampleRate = this->mSampleRate_ = siw.sampleRate();
         this->mFileName_ = siw.subjectNum() + "_" + QDateTime::currentDateTime().toString("yyyy.MM.dd.hh:mm:ss");
 
-        this->mBuf_ = new double[this->mChannelNum_];
-        this->mChart_= new eegneo::EEGWavePlotImpl(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH);
-
         this->startDataSampler();
-        this->initChart();
+        this->initSignalChart();
+        this->initFFTChart();
+
+        QObject::connect(mWavePlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); });
+        this->mWavePlotTimer_->start(GRAPH_FRESH);
+
+        QObject::connect(mFFTPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateFFT(); });
+        this->mFFTPlotTimer_->start(5 * GRAPH_FRESH);
+
         this->show();
 
         this->_fileInfo.tempFiles = mFileName_.toStdString();
@@ -80,7 +87,7 @@ void AcquisitionWindow::start()
 void AcquisitionWindow::createMark(const QString& event)
 {
     if(event.isNull() || event.isEmpty()) return;
-    mChart_->addOneMarkerLine(event);
+    mSignalChart_->addOneMarkerLine(event);
     // 将marker写入文件
     if (mRecCmd_.isRecordOn)
     {
@@ -123,28 +130,56 @@ void AcquisitionWindow::stopDataSampler()
     mSharedMemory_->detach();
 }
 
-void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mChart_->setAxisYScale(0, mChannelNum_ * curMaxVoltage); }
-void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
+void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mSignalChart_->setAxisYScale(0, mChannelNum_ * curMaxVoltage); }
+void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mSignalChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
 
-void AcquisitionWindow::initChart()
+void AcquisitionWindow::initSignalChart()
 {
-    ui->graphicsView->setChart(mChart_->chart());                                   
+    this->mSignalBuf_ = new double[this->mChannelNum_];
+    this->mSignalChart_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH, mSignalBuf_);
 
-    mChart_->setAxisXScale(eegneo::Second::FIVE);
-    mChart_->setAxisYScale(0, 10 * mChannelNum_);
+    ui->graphicsView->setChart(this->mSignalChart_->chart());                                   
+    this->mSignalChart_->setAxisXScale(eegneo::Second::FIVE);
+    this->mSignalChart_->setAxisYScale(0, 10 * mChannelNum_);
+}
 
-    QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); });
-    mPlotTimer_->start(GRAPH_FRESH);
+void AcquisitionWindow::initFFTChart()
+{
+    this->mFFTChart_ = new eegneo::FFTWavePlotter(this->mChannelNum_, this->mSampleRate_);
+
+    ui->graphicsView_2->setChart(this->mFFTChart_->chart());
+    this->mFFTChart_->setAxisXScale(eegneo::Frequency::SIXTY);
+    this->mFFTChart_->setAxisYScale(0.0, 50.0);
 }
 
 // 波形更新
 void AcquisitionWindow::updateWave()
 {
     if (!mSharedMemory_->lock()) return;
-    ::memcpy(mBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
+    ::memcpy(mSignalBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
     if (!mSharedMemory_->unlock()) return;
 
-    mChart_->update(mBuf_);
+    mSignalChart_->update();
+}
+
+void AcquisitionWindow::updateFFT()
+{
+    if (!mSharedMemory_->lock()) return;
+
+    const void* pos = (const void*)((const char*)mSharedMemory_->data() + mChannelNum_ * sizeof(double));
+    for (std::size_t i = 0; i < mChannelNum_; ++i)
+    {
+        auto& real = mFFTChart_->real(i);
+        auto& im = mFFTChart_->im(i);
+        ::memcpy(real.data(), pos, real.size());
+        pos = (const void*)((const char*)pos + real.size());
+        ::memcpy(im.data(), pos, im.size());
+        pos = (const void*)((const char*)pos + im.size());
+    }
+    
+    if (!mSharedMemory_->unlock()) return;
+
+    mFFTChart_->update();
 }
 
 // p300 Oddball范式

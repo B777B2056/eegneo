@@ -12,7 +12,7 @@ namespace eegneo
             Filter(double sampleFreqHz);
 
             void setSampleFreqHz(double sampleFreqHz) { this->mSampleFreqHz_ = sampleFreqHz; }
-            void appendData(double originalData);
+            void appendSignalData(double originalData);
 
             double lowPass(double cutoffFreq);
             double highPass(double cutoffFreq);

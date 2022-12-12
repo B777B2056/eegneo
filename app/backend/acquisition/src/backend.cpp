@@ -1,6 +1,11 @@
 #include "backend.h"
 #include "sampler.h"
 #include "utils/filter.h"
+#include "utils/fft.h"
+
+#define BUF_BYTES_LEN (this->mChannelNum_ * sizeof(double))
+
+static std::fstream debug_file{"E:/jr/eegneo/debug.txt", std::ios::out};
 
 namespace eegneo
 {
@@ -13,6 +18,7 @@ namespace eegneo
         , mDataFile_{DATA_FILE_PATH, std::ios::out}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
         , mSharedMemory_{"Sampler"}, mIsStop_(false)
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
+        , mFFT_(new utils::FFTCalculator[channelNum])
     {
         if (!mDataFile_.is_open())
         {
@@ -22,9 +28,13 @@ namespace eegneo
         {
             mSharedMemory_.detach();
         }
-        if (!mSharedMemory_.create(mChannelNum_ * sizeof(double)))
+        if (!mSharedMemory_.create(1024 * 32 * 2 + BUF_BYTES_LEN))
         {
             throw "Shared memory create failed!";
+        }
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mFFT_[i].init(1024);
         }
     }
 
@@ -32,6 +42,7 @@ namespace eegneo
     {
         delete[] mFiltBuf_;
         delete[] mFilter_;
+        delete[] mFFT_;
         delete mDataSampler_;
     }
 
@@ -40,65 +51,9 @@ namespace eegneo
         while (!mIsStop_)
         {
             std::unique_lock<std::mutex> lock(mMutex_);
-            this->doSample(); 
-            if (mRecCmd_.isRecordOn) this->doRecord();
-            if (mFiltCmd_.isFiltOn) this->doFilt();
-
-            if (!mSharedMemory_.lock()) continue;
-            if (mFiltCmd_.isFiltOn)
-            {
-                ::memcpy(mSharedMemory_.data(), mFiltBuf_, mChannelNum_ * sizeof(double));
-            }
-            else
-            {
-                ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), mChannelNum_ * sizeof(double));
-            }
-            if (!mSharedMemory_.unlock()) continue;
-        }
-    }
-
-    void AcquisitionBackend::doSample()
-    {
-        mDataSampler_->sampleOnce();
-    }
-
-    void AcquisitionBackend::doRecord()
-    {
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mDataFile_ << mDataSampler_->data()[i] << " ";
-        }
-        mDataFile_ << "\n";
-        ++mCurDataN_;
-    }
-
-    void AcquisitionBackend::doFilt()
-    {
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            double afterFiltData = -1.0;
-            mFilter_[i].appendData(mDataSampler_->data()[i]);
-            if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
-            {
-                afterFiltData = mFilter_[i].lowPass(mFiltCmd_.lowCutoff);
-            }
-            else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
-            {
-                afterFiltData = mFilter_[i].highPass(mFiltCmd_.highCutoff);
-            }
-            else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
-            {
-                afterFiltData = mFilter_[i].bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
-            }
-            else    // 无滤波
-            {
-                afterFiltData = mDataSampler_->data()[i];
-            }
-            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
-            {
-                afterFiltData = mFilter_[i].notch(mFiltCmd_.notchCutoff);
-            }
-            mFiltBuf_[i] = afterFiltData;
+            this->doSample(); this->doRecord(); // TODO: 线程1
+            this->doFilt(); // TODO: 线程2
+            this->doFFT();  // TODO: 线程3
         }
     }
 
@@ -127,5 +82,91 @@ namespace eegneo
     {
         std::unique_lock<std::mutex> lock(this->mMutex_);
         this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
+    }
+
+    void AcquisitionBackend::doSample()
+    {
+        mDataSampler_->sampleOnce();
+
+        if (!mFiltCmd_.isFiltOn)
+        {
+            if (!mSharedMemory_.lock()) return;
+            ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), BUF_BYTES_LEN);
+            mSharedMemory_.unlock();
+        }
+    }
+
+    void AcquisitionBackend::doRecord()
+    {
+        if (!mRecCmd_.isRecordOn) return;
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mDataFile_ << mDataSampler_->data()[i] << " ";
+        }
+        mDataFile_ << "\n";
+        ++mCurDataN_;
+    }
+
+    void AcquisitionBackend::doFilt()
+    {
+        if (!mFiltCmd_.isFiltOn) return;
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            double afterFiltData = -1.0;
+            mFilter_[i].appendSignalData(mDataSampler_->data()[i]);
+            if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
+            {
+                afterFiltData = mFilter_[i].lowPass(mFiltCmd_.lowCutoff);
+            }
+            else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
+            {
+                afterFiltData = mFilter_[i].highPass(mFiltCmd_.highCutoff);
+            }
+            else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
+            {
+                afterFiltData = mFilter_[i].bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
+            }
+            else    // 无滤波
+            {
+                afterFiltData = mDataSampler_->data()[i];
+            }
+            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
+            {
+                afterFiltData = mFilter_[i].notch(mFiltCmd_.notchCutoff);
+            }
+            mFiltBuf_[i] = afterFiltData;
+        }
+
+        if (!mSharedMemory_.lock()) return;
+        ::memcpy(mSharedMemory_.data(), mFiltBuf_, BUF_BYTES_LEN);
+        mSharedMemory_.unlock();
+    }
+
+    void AcquisitionBackend::doFFT()
+    {
+        std::unique_lock<std::mutex> lock(mMutex_);
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mFFT_[i].appendSignalData(mDataSampler_->data()[i]);
+            mFFT_[i].doFFT();
+        }
+
+        if (!mSharedMemory_.lock()) return;
+        void* pos = (void*)((char*)mSharedMemory_.data() + BUF_BYTES_LEN);
+
+        {
+            // std::unique_lock<std::mutex> lock(mMutex_);
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
+            {
+                auto& real = mFFT_[i].real();
+                auto& im = mFFT_[i].im();
+                ::memcpy(pos, real.data(), real.size());
+                pos = (void*)((char*)pos + real.size());
+                ::memcpy(pos, im.data(), im.size());
+                pos = (void*)((char*)pos + im.size());
+            }
+        }
+
+        mSharedMemory_.unlock();
     }
 }   // namespace eegneo

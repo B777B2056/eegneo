@@ -5,7 +5,7 @@
 #include <QMainWindow>
 #include <QList>
 #include <QSharedMemory>
-#include "../../app/inc/acquisition/wave_plotter.h"
+#include "../../app/inc/acquisition/plotter.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -33,7 +33,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    eegneo::EEGWavePlotImpl mChart_;
+    eegneo::EEGWavePlotter mChart_;
     QTimer* mTimer_;
     std::array<double, 8> mBuf_;
     QSharedMemory mSharedMemory_;

@@ -17,7 +17,7 @@ namespace eegneo
 
         }
 
-        void Filter::appendData(double originalData)
+        void Filter::appendSignalData(double originalData)
         {
             if (mOriginalSignal_.size() >= NumTaps)
             {

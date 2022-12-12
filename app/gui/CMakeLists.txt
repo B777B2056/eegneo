@@ -7,8 +7,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets Charts Network)
 
 include_directories("inc")
 
-file(GLOB HEADERS "inc/*.h" "inc/*/*.h" "../utils/ipc.h")
-file(GLOB SOURCES "src/mainwindow.cpp" "src/*/*.cpp" "../utils/filter.cpp" "../utils/ipc.cpp")
+file(GLOB HEADERS "inc/*.h" "inc/*/*.h" "../utils/*.h")
+file(GLOB SOURCES "src/mainwindow.cpp" "src/*/*.cpp" "../utils/*.cpp" "../third/fft/*.cpp")
 file(GLOB EDFLIB_SOURCES "../third/edflib/*.c")
 file(GLOB UI "ui/*.ui")
 

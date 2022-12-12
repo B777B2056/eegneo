@@ -5,7 +5,8 @@
 #include <fstream>
 #include <string>
 #include <array>
-#include "acquisition/wave_plotter.h"
+#include <vector>
+#include "acquisition/plotter.h"
 #include "utils/ipc.h"
 
 QT_BEGIN_NAMESPACE
@@ -51,12 +52,14 @@ private:
     void createMark(const QString& event);
     // 更新波形显示
     void updateWave();
+    void updateFFT();
     // 设置Y轴范围
     void setVoltageAxisScale(int curMaxVoltage);
     // 设置X轴范围
     void setTimeAxisScale(std::int8_t t);
     // 绘图初始化
-    void initChart();
+    void initSignalChart();
+    void initFFTChart();
     // 设置信号与槽的连接关系
     void connectSignalAndSlot();
     // 数据文件保存
@@ -70,12 +73,14 @@ private:
     std::size_t mChannelNum_;
     QProcess mBackend_;
     // 绘图相关
-    QTimer* mPlotTimer_;
-    double* mBuf_;
-    QSharedMemory* mSharedMemory_;
-    eegneo::EEGWavePlotImpl* mChart_;
+    QTimer* mWavePlotTimer_ = nullptr;
+    QTimer* mFFTPlotTimer_ = nullptr;
+    double* mSignalBuf_ = nullptr;
+    QSharedMemory* mSharedMemory_ = nullptr;
+    eegneo::EEGWavePlotter* mSignalChart_ = nullptr;
+    eegneo::FFTWavePlotter* mFFTChart_ = nullptr;
     // 滤波相关
-    eegneo::utils::IpcWriter* mIpcWriter_;
+    eegneo::utils::IpcWriter* mIpcWriter_ = nullptr;
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关

@@ -23,6 +23,7 @@ namespace eegneo
         // {
         //     throw "Data file not open!";
         // }
+        
     }
 
     void TestDataSampler::sampleOnce()
