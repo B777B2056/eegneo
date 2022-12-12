@@ -16,7 +16,7 @@ namespace eegneo
         : mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum), mCurDataN_(0)
         , mDataFile_{DATA_FILE_PATH, std::ios::out}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
-        , mSharedMemory_{"Sampler"}, mIsStop_(false)
+        , mSharedMemory_{"Sampler"}
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
         , mFFT_(new utils::FFTCalculator[channelNum])
     {
@@ -46,26 +46,21 @@ namespace eegneo
         delete mDataSampler_;
     }
 
-    void AcquisitionBackend::start()
+    void AcquisitionBackend::run()
     {
-        while (!mIsStop_)
-        {
-            std::unique_lock<std::mutex> lock(mMutex_);
-            this->doSample(); this->doRecord(); // TODO: 线程1
-            this->doFilt(); // TODO: 线程2
-            this->doFFT();  // TODO: 线程3
-        }
+        this->doSample(); 
+        this->doRecord(); 
+        this->doFilt();
+        this->doFFT(); 
     }
 
     void AcquisitionBackend::handleRecordCmd(RecordCmd* cmd)
     {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
         this->mRecCmd_ = *cmd;   // 设置记录参数
     }
 
     void AcquisitionBackend::handleFiltCmd(FiltCmd* cmd)
     {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
         this->mFiltCmd_ = *cmd;  // 设置滤波参数
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
@@ -75,21 +70,19 @@ namespace eegneo
 
     void AcquisitionBackend::handleShutdownCmd(ShutdownCmd* cmd)
     {
-        this->mIsStop_ = true;  // 停止采集
+        // 停止采集
     }
 
     void AcquisitionBackend::handleMarkerCmd(MarkerCmd* cmd)
     {
-        std::unique_lock<std::mutex> lock(this->mMutex_);
         this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
     }
 
     void AcquisitionBackend::doSample()
     {
         mDataSampler_->sampleOnce();
-
         if (!mFiltCmd_.isFiltOn)
-        {
+        {   
             if (!mSharedMemory_.lock()) return;
             ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), BUF_BYTES_LEN);
             mSharedMemory_.unlock();
@@ -144,27 +137,23 @@ namespace eegneo
 
     void AcquisitionBackend::doFFT()
     {
-        std::unique_lock<std::mutex> lock(mMutex_);
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
             mFFT_[i].appendSignalData(mDataSampler_->data()[i]);
             mFFT_[i].doFFT();
         }
-
-        if (!mSharedMemory_.lock()) return;
         void* pos = (void*)((char*)mSharedMemory_.data() + BUF_BYTES_LEN);
 
+        if (!mSharedMemory_.lock()) return;
+
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            // std::unique_lock<std::mutex> lock(mMutex_);
-            for (std::size_t i = 0; i < mChannelNum_; ++i)
-            {
-                auto& real = mFFT_[i].real();
-                auto& im = mFFT_[i].im();
-                ::memcpy(pos, real.data(), real.size());
-                pos = (void*)((char*)pos + real.size());
-                ::memcpy(pos, im.data(), im.size());
-                pos = (void*)((char*)pos + im.size());
-            }
+            auto& real = mFFT_[i].real();
+            auto& im = mFFT_[i].im();
+            ::memcpy(pos, real.data(), real.size());
+            pos = (void*)((char*)pos + real.size());
+            ::memcpy(pos, im.data(), im.size());
+            pos = (void*)((char*)pos + im.size());
         }
 
         mSharedMemory_.unlock();

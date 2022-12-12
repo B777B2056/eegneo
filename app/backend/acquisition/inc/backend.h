@@ -1,9 +1,9 @@
 #pragma once
-#include <atomic>
 #include <fstream>
-#include <mutex>
 #include <QSharedMemory>
 #include "common/common.h"
+
+class QTimer;
 
 namespace eegneo
 {
@@ -20,7 +20,7 @@ namespace eegneo
         AcquisitionBackend& operator=(AcquisitionBackend&&) = default;
         virtual ~AcquisitionBackend();
 
-        void start();
+        void run();
 
         void handleRecordCmd(RecordCmd* cmd);
         void handleFiltCmd(FiltCmd* cmd);
@@ -31,15 +31,16 @@ namespace eegneo
         EEGDataSampler* mDataSampler_;
         std::size_t mChannelNum_;
 
-        std::uint64_t mCurDataN_; std::fstream mDataFile_, mEventFile_;
+        std::uint64_t mCurDataN_; 
+        std::fstream mDataFile_, mEventFile_;
 
         QSharedMemory mSharedMemory_;
 
-        RecordCmd mRecCmd_; FiltCmd mFiltCmd_;
-        
-        std::mutex mMutex_; std::atomic_bool mIsStop_;
+        RecordCmd mRecCmd_; 
+        FiltCmd mFiltCmd_;
 
-        utils::Filter* mFilter_; double* mFiltBuf_;
+        utils::Filter* mFilter_; 
+        double* mFiltBuf_;
 
         utils::FFTCalculator* mFFT_;
 

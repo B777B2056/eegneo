@@ -1,5 +1,4 @@
 #include "fft.h"
-#include "third/fft/fft.h"
 
 namespace eegneo
 {
@@ -44,6 +43,7 @@ namespace eegneo
             }
             mRe_.resize(audiofft::AudioFFT::ComplexSize(mFFTSize_)); 
             mIm_.resize(audiofft::AudioFFT::ComplexSize(mFFTSize_)); 
+            fft.init(mFFTSize_);
         }
 
         void FFTCalculator::appendSignalData(double data)
@@ -58,9 +58,6 @@ namespace eegneo
         void FFTCalculator::doFFT()
         {
             if (mSignal_.size() < mFFTSize_)   return;
-            
-            audiofft::AudioFFT fft;
-            fft.init(mFFTSize_);
             fft.fft(mSignal_.data(), mRe_.data(), mIm_.data());
         }  
     }   // namespace utils 

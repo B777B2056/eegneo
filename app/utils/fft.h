@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include "third/fft/fft.h"
 
 namespace eegneo
 {
@@ -22,6 +23,7 @@ namespace eegneo
             const std::vector<float>& im() const { return mIm_; }
 
         private:
+            audiofft::AudioFFT fft;
             std::uint64_t mFFTSize_;
             std::vector<float> mSignal_;
             std::vector<float> mRe_;
