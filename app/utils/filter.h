@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "third/dsp/dsp.hpp"
+#include <Iir.h>
 
 namespace eegneo
 {
@@ -12,21 +12,19 @@ namespace eegneo
             Filter(double sampleFreqHz);
 
             void setSampleFreqHz(double sampleFreqHz) { this->mSampleFreqHz_ = sampleFreqHz; }
-            void appendSignalData(double originalData);
 
-            double lowPass(double cutoffFreq);
-            double highPass(double cutoffFreq);
-            double bandPass(double lowCutoffFreq, double highCutoffFreq);
-            double notch(double notchFreq);
+            double lowPass(double data, double cutoffFreq);
+            double highPass(double data, double cutoffFreq);
+            double bandPass(double data, double lowCutoffFreq, double highCutoffFreq);
+            double notch(double data, double notchFreq);
 
         private:
             double mSampleFreqHz_;
-            dsp::KaiserGenerator mKaiser_;
-            dsp::FilterHolder<double> mHolder_;
-            constexpr static std::size_t NumTaps = 51;
-
-            std::vector<double> mOriginalSignal_;
-            std::vector<double> mFiltResult_;
+            constexpr static std::size_t order = 4;
+            Iir::Butterworth::LowPass<order> mLowPassFilter_;
+            Iir::Butterworth::HighPass<order> mHighPassFilter_;
+            Iir::Butterworth::BandPass<order> mBandPassFilter_;
+            Iir::Butterworth::BandStop<order> mNotchFilter_;
         };
     }   // namespace utils
 }   // namespace eegneo

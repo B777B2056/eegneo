@@ -2,19 +2,21 @@
 #include <functional>
 #include <unordered_map>
 #include <QObject>
-#include <QTcpSocket>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include "common/common.h"
 
 namespace eegneo
 {
     namespace utils
     {
-        class IpcReader : public QObject
+        class IpcServer
         {
-            Q_OBJECT
-
         public:
-            IpcReader(QTcpSocket* channel);
+            IpcServer();
+            ~IpcServer();
+
+            bool start();
 
             template<typename Cmd>
             void setCmdHandler(std::function<void(Cmd*)> handler)
@@ -26,17 +28,21 @@ namespace eegneo
             }
 
         private:
-            QTcpSocket* mChannel_;
+            QLocalServer mSvr_;
+            QLocalSocket* mChannelPtr_;
             std::unordered_map<CmdId, std::function<void(EmptyCmd*)>> mHandlers_;
 
             void handleMsg();
             bool readBytes(char* buf, std::uint16_t bytesLength);
         };
 
-        class IpcWriter
+        class IpcClient
         {
         public:
-            IpcWriter(QTcpSocket* channel);
+            IpcClient();
+            ~IpcClient();
+
+            bool start();
 
             template<typename Cmd>
             void sendCmd(const Cmd& cmd)
@@ -50,16 +56,16 @@ namespace eegneo
                 std::int64_t bytesTransferred = 0;
                 do
                 {
-                    std::int64_t t = mChannel_->write(buf + bytesTransferred, len - bytesTransferred);
+                    std::int64_t t = mChannel_.write(buf + bytesTransferred, len - bytesTransferred);
                     if (!t) break;
                     bytesTransferred += t;
                 } while (bytesTransferred < len);
-                mChannel_->waitForBytesWritten();
-                mChannel_->flush();
+                mChannel_.waitForBytesWritten();
+                mChannel_.flush();
             }
 
         private:
-            QTcpSocket* mChannel_;
+            QLocalSocket mChannel_;
         };
     }   // namespace utils
 }   // namespace eegneo

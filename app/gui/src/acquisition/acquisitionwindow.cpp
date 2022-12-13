@@ -26,15 +26,13 @@ extern "C"
 
 namespace
 {
-    static QTcpSocket IPC_WRITER_SOCKET;
     constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe";
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
-    , mWavePlotTimer_(new QTimer(this))
-    , mFFTPlotTimer_(new QTimer(this))
+    , mPlotTimer_(new QTimer(this))
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
@@ -45,8 +43,7 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 AcquisitionWindow::~AcquisitionWindow()
 {
     delete mIpcWriter_;
-    delete mWavePlotTimer_;
-    delete mFFTPlotTimer_;
+    delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mSignalBuf_;
     delete mSignalChart_;
@@ -67,11 +64,8 @@ void AcquisitionWindow::start()
         this->initSignalChart();
         this->initFFTChart();
 
-        QObject::connect(mWavePlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); });
-        this->mWavePlotTimer_->start(GRAPH_FRESH);
-
-        QObject::connect(mFFTPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateFFT(); });
-        this->mFFTPlotTimer_->start(5 * GRAPH_FRESH);
+        QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); this->updateFFT(); });
+        this->mPlotTimer_->start(GRAPH_FRESH);
 
         this->show();
 
@@ -104,17 +98,10 @@ void AcquisitionWindow::startDataSampler()
     mBackend_.start(BACKEND_PATH, args);
     if (mBackend_.waitForStarted(-1))
     {
-        IPC_WRITER_SOCKET.connectToHost(QHostAddress::LocalHost, eegneo::IPC_PORT);
-        if (IPC_WRITER_SOCKET.waitForConnected(-1))
-        {
-            mIpcWriter_ = new eegneo::utils::IpcWriter(&IPC_WRITER_SOCKET);
-            mSharedMemory_ = new QSharedMemory{"Sampler"};
-            while (!mSharedMemory_->attach());
-        }
-        else
-        {
-
-        }
+        mIpcWriter_ = new eegneo::utils::IpcClient();
+        while (!mIpcWriter_->start());
+        mSharedMemory_ = new QSharedMemory{"Sampler"};
+        while (!mSharedMemory_->attach());
     }
     else
     {
@@ -125,7 +112,6 @@ void AcquisitionWindow::startDataSampler()
 void AcquisitionWindow::stopDataSampler()
 {
     mIpcWriter_->sendCmd(eegneo::ShutdownCmd{});
-    IPC_WRITER_SOCKET.disconnectFromHost();
     mBackend_.close();
     mSharedMemory_->detach();
 }
@@ -161,12 +147,13 @@ void AcquisitionWindow::updateWave()
 
     mSignalChart_->update();
 }
-
+#include <iostream>
 void AcquisitionWindow::updateFFT()
 {
     if (!mSharedMemory_->lock()) return;
 
     const void* pos = (const void*)((const char*)mSharedMemory_->data() + mChannelNum_ * sizeof(double));
+
     for (std::size_t i = 0; i < mChannelNum_; ++i)
     {
         auto& real = mFFTChart_->real(i);

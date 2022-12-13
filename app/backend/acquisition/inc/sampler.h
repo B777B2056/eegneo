@@ -2,8 +2,7 @@
 #include <QSerialPort>
 #include <QString>
 #include <QUdpSocket>
-
-class QTcpSocket;
+#include <QTimer>
 
 namespace eegneo
 {
@@ -36,6 +35,8 @@ namespace eegneo
         void sampleOnce() override;
 
     private:
+        QTimer timer;
+        constexpr static double pi = 3.1415926535;
         // std::fstream mDataFile_;
 
         // const char* DATA_FILE_PATH = "";

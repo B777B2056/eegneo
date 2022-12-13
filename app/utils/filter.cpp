@@ -11,56 +11,33 @@ namespace eegneo
         }
 
         Filter::Filter(double sampleFreqHz)
-            : mSampleFreqHz_(sampleFreqHz), mKaiser_(10.)
-            , mOriginalSignal_(0), mFiltResult_(NumTaps)
+            : mSampleFreqHz_(sampleFreqHz)
         {
 
         }
 
-        void Filter::appendSignalData(double originalData)
+        double Filter::lowPass(double data, double cutoffFreq)
         {
-            if (mOriginalSignal_.size() >= NumTaps)
-            {
-                mOriginalSignal_.erase(mOriginalSignal_.begin());
-            }
-            mOriginalSignal_.push_back(originalData);
+            mLowPassFilter_.setup(mSampleFreqHz_, cutoffFreq);
+            return mLowPassFilter_.filter(data);
         }
 
-        double Filter::lowPass(double cutoffFreq)
+        double Filter::highPass(double data, double cutoffFreq)
         {
-            if (mOriginalSignal_.size() < NumTaps) return -1.0;
-            auto filterCoeffs = dsp::FirLowPassFilter(NumTaps, cutoffFreq, mSampleFreqHz_, mKaiser_);
-            mHolder_.Initialise(NumTaps, filterCoeffs, true);
-            mHolder_(mOriginalSignal_.begin(), mOriginalSignal_.end(), mFiltResult_.begin(), true);
-            return mFiltResult_.back();
+            mHighPassFilter_.setup(mSampleFreqHz_, cutoffFreq);
+            return mHighPassFilter_.filter(data);
         }
 
-        double Filter::highPass(double cutoffFreq)
+        double Filter::bandPass(double data, double lowCutoffFreq, double highCutoffFreq)
         {
-            if (mOriginalSignal_.size() < NumTaps) return -1.0;
-            auto filterCoeffs = dsp::FirHighPassFilter(NumTaps, cutoffFreq, mSampleFreqHz_, mKaiser_);
-            mHolder_.Initialise(NumTaps, filterCoeffs, true);
-            mHolder_(mOriginalSignal_.begin(), mOriginalSignal_.end(), mFiltResult_.begin(), true);
-            return mFiltResult_.back();
+            mBandPassFilter_.setup(mSampleFreqHz_, lowCutoffFreq, highCutoffFreq);
+            return mBandPassFilter_.filter(data);
         }
 
-        double Filter::bandPass(double lowCutoffFreq, double highCutoffFreq)
+        double Filter::notch(double data, double notchFreq)
         {
-            if (mOriginalSignal_.size() < NumTaps) return -1.0;
-            double bandWidth = highCutoffFreq - lowCutoffFreq;
-            auto filterCoeffs = dsp::FirBandPassFilter(NumTaps, lowCutoffFreq + (bandWidth / 2.0), bandWidth, mSampleFreqHz_, mKaiser_);
-            mHolder_.Initialise(NumTaps, filterCoeffs, true);
-            mHolder_(mOriginalSignal_.begin(), mOriginalSignal_.end(), mFiltResult_.begin(), true);
-            return mFiltResult_.back();
-        }
-
-        double Filter::notch(double notchFreq)
-        {
-            if (mOriginalSignal_.size() < NumTaps) return -1.0;
-            auto filterCoeffs = dsp::FirNotchFilter(NumTaps, notchFreq, 4.0, mSampleFreqHz_, mKaiser_);
-            mHolder_.Initialise(NumTaps, filterCoeffs, true);
-            mHolder_(mOriginalSignal_.begin(), mOriginalSignal_.end(), mFiltResult_.begin(), true);
-            return mFiltResult_.back();
+            mNotchFilter_.setup(mSampleFreqHz_, notchFreq, 1.0);
+            return mNotchFilter_.filter(data);
         }
     }   // namespace utils
 }   // namespace eegneo

@@ -12,17 +12,37 @@
 
 namespace eegneo
 {
+    constexpr const char* IPC_NAME = "eegneo_ipc";
+
     namespace utils
     {
-        IpcReader::IpcReader(QTcpSocket* channel)
-            : mChannel_(channel)
+        IpcServer::IpcServer()  : mChannelPtr_(nullptr)
         {
-            QObject::connect(mChannel_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(); });
+            
         }
 
-        void IpcReader::handleMsg()
+        IpcServer::~IpcServer()
         {
-            if (!mChannel_->bytesAvailable())
+            mSvr_.close();
+        }
+
+        bool IpcServer::start()
+        {
+            if (mSvr_.listen(IPC_NAME))
+            {
+                if (mSvr_.waitForNewConnection(-1))
+                {
+                    mChannelPtr_ = mSvr_.nextPendingConnection();
+                    QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void IpcServer::handleMsg()
+        {
+            if (!mChannelPtr_->bytesAvailable())
             {
                 return;
             }
@@ -50,22 +70,39 @@ namespace eegneo
             }
         }
 
-        bool IpcReader::readBytes(char* buf, std::uint16_t bytesLength)
+        bool IpcServer::readBytes(char* buf, std::uint16_t bytesLength)
         {   
             std::uint16_t bytesReceived = 0;    
             do  
             {   
-                int t = mChannel_->read(buf + bytesReceived, bytesLength - bytesReceived);  
+                int t = mChannelPtr_->read(buf + bytesReceived, bytesLength - bytesReceived);  
                 if (-1 == t) return false;
                 bytesReceived += t; 
             } while (bytesReceived < bytesLength);   
             return true;
         }
 
-        IpcWriter::IpcWriter(QTcpSocket* channel)
-            : mChannel_(channel)
+        IpcClient::IpcClient()
         {
-            
+
+        }
+
+        IpcClient::~IpcClient()
+        {
+            mChannel_.disconnectFromServer();
+        }
+
+        bool IpcClient::start()
+        {
+            mChannel_.connectToServer(IPC_NAME);
+            if (mChannel_.waitForConnected(-1))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
     }   // namespace utils
 }   // namespace eegneo

@@ -10,12 +10,9 @@ namespace eegneo
         class FFTCalculator
         {
         public:
-            FFTCalculator() : mFFTSize_(0) {} 
-            FFTCalculator(std::uint64_t sampleFreqHz);
+            FFTCalculator();
+            static std::uint64_t fftsize() { return fftsize_; }
 
-            static std::uint64_t fftsize(std::uint64_t sampleFreqHz);
-
-            void init(std::uint64_t sampleFreqHz);
             void appendSignalData(double data);
             void doFFT();
 
@@ -24,7 +21,7 @@ namespace eegneo
 
         private:
             audiofft::AudioFFT fft;
-            std::uint64_t mFFTSize_;
+            constexpr static std::uint64_t fftsize_ = 32;
             std::vector<float> mSignal_;
             std::vector<float> mRe_;
             std::vector<float> mIm_;

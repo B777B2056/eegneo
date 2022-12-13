@@ -15,6 +15,8 @@ namespace eegneo
         
     }
 
+    static int t = 0;
+
     TestDataSampler::TestDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
         // , mDataFile_{DATA_FILE_PATH, std::ios::in}
@@ -23,15 +25,21 @@ namespace eegneo
         // {
         //     throw "Data file not open!";
         // }
-        
+        QObject::connect(&timer, &QTimer::timeout, [this]()->void
+        {
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
+            {
+                // mBuf_[i] = 2+3*cos(2*pi*50.0*t-pi*30.0/180.0)+1.5*cos(2*pi*75.0*t+pi*90.0/180.0);
+                mBuf_[i] = 3.0*std::abs(cos(t*pi/180.0) + cos((1/13.0)+t*pi/180.0));
+            }
+            ++t;
+        });
+        timer.start(1000.0/256.0);
     }
 
     void TestDataSampler::sampleOnce()
     {
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mBuf_[i] = rand() % 10;
-        }
+
     }
 
     static void SendData2SerialPort(QSerialPort& serialPort, const QByteArray& data)

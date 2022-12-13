@@ -28,13 +28,9 @@ namespace eegneo
         {
             mSharedMemory_.detach();
         }
-        if (!mSharedMemory_.create(1024 * 32 * 2 + BUF_BYTES_LEN))
+        if (!mSharedMemory_.create(10240))
         {
             throw "Shared memory create failed!";
-        }
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mFFT_[i].init(1024);
         }
     }
 
@@ -105,29 +101,26 @@ namespace eegneo
         if (!mFiltCmd_.isFiltOn) return;
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            double afterFiltData = -1.0;
-            mFilter_[i].appendSignalData(mDataSampler_->data()[i]);
             if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
             {
-                afterFiltData = mFilter_[i].lowPass(mFiltCmd_.lowCutoff);
+                mFiltBuf_[i] = mFilter_[i].lowPass(mDataSampler_->data()[i], mFiltCmd_.lowCutoff);
             }
             else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
             {
-                afterFiltData = mFilter_[i].highPass(mFiltCmd_.highCutoff);
+                mFiltBuf_[i] = mFilter_[i].highPass(mDataSampler_->data()[i], mFiltCmd_.highCutoff);
             }
             else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
             {
-                afterFiltData = mFilter_[i].bandPass(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
+                mFiltBuf_[i] = mFilter_[i].bandPass(mDataSampler_->data()[i], mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
             }
             else    // 无滤波
             {
-                afterFiltData = mDataSampler_->data()[i];
+                mFiltBuf_[i] = mDataSampler_->data()[i];
             }
-            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波
+            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波（在上述滤波的基础上滤波）
             {
-                afterFiltData = mFilter_[i].notch(mFiltCmd_.notchCutoff);
+                mFiltBuf_[i] = mFilter_[i].notch(mFiltBuf_[i], mFiltCmd_.notchCutoff);
             }
-            mFiltBuf_[i] = afterFiltData;
         }
 
         if (!mSharedMemory_.lock()) return;
@@ -142,6 +135,7 @@ namespace eegneo
             mFFT_[i].appendSignalData(mDataSampler_->data()[i]);
             mFFT_[i].doFFT();
         }
+
         void* pos = (void*)((char*)mSharedMemory_.data() + BUF_BYTES_LEN);
 
         if (!mSharedMemory_.lock()) return;

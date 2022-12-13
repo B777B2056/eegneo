@@ -7,28 +7,19 @@
 
 namespace eegneo
 {
-    WavePlotter::WavePlotter(std::size_t n, qreal moveOffset)
-        : mMoveOffset_(moveOffset), mLineSeries_(new QLineSeries[n]), mData_(n)
+    WavePlotter::WavePlotter()
     {
         this->setAxisXScale(0, 5);
         this->setAxisYScale(0, 0);
         
         mChart_.legend()->hide();
         mChart_.addAxis(&mAxisX_, Qt::AlignBottom);                    // 将X轴添加到图表上
-        mChart_.addAxis(&mAxisY_, Qt::AlignLeft);                      // 将Y轴添加到图表上
-
-        mAxisX_.setTickCount(5);
-        mAxisY_.setTickCount(static_cast<int>(n));
-
-        for (int i = 0; i < mData_.size(); ++i)
-        {
-            this->addOneLineSeries(&mLineSeries_[i]);
-        }
+        mChart_.addAxis(&mAxisY_, Qt::AlignLeft);                      // 将Y轴添加到图表上        
     }
 
     WavePlotter::~WavePlotter()
     {
-        // delete[] mLineSeries_;
+        
     }
 
     void WavePlotter::addOneLineSeries(QLineSeries* line)
@@ -52,18 +43,29 @@ namespace eegneo
     }
 
     EEGWavePlotter::EEGWavePlotter(std::size_t channelNum, std::size_t sampleRate, std::size_t freshMs, double* buf)
-        : WavePlotter(channelNum, (double)sampleRate / (1000.0 / freshMs))
+        : WavePlotter()
         , mSampleRate_(sampleRate)
         , mFreshRate_((1000.0 / freshMs))
+        , mMoveOffset_((double)sampleRate / mFreshRate_)
+        , mLineSeries_(new QLineSeries[channelNum])
+        , mData_(channelNum)
         , mBuf_(buf)
     {
         mAxisX_.setTitleText("Time (s)");
         mAxisY_.setTitleText("Voltage (uV)");
+
+        mAxisX_.setTickCount(5);
+        mAxisY_.setTickCount(static_cast<int>(channelNum));
+
+        for (int i = 0; i < mData_.size(); ++i)
+        {
+            this->addOneLineSeries(&mLineSeries_[i]);
+        }
     }
 
     EEGWavePlotter::~EEGWavePlotter()
     {
-
+        // delete[] mLineSeries_;
     }
 
     void EEGWavePlotter::setAxisXScale(Second sec)
@@ -145,8 +147,10 @@ namespace eegneo
     }
 
     FFTWavePlotter::FFTWavePlotter(std::size_t channelNum, std::size_t sampleRate)
-        : WavePlotter(channelNum, 1.0)
+        : WavePlotter()
+        , mFFTSize_(audiofft::AudioFFT::ComplexSize(eegneo::utils::FFTCalculator::fftsize()))
         , mSampleRate_(sampleRate)
+        , mChannelNum_(channelNum)
         , mFFTBuf_(channelNum * 2)
     {
         mAxisX_.setTitleText("Freqency (Hz)");
@@ -154,32 +158,48 @@ namespace eegneo
 
         for (auto& buf : mFFTBuf_)
         {
-            buf.resize(eegneo::utils::FFTCalculator::fftsize(mSampleRate_));
+            buf.resize(mFFTSize_);
+        }
+
+        for (std::size_t n = 0; n < mFFTSize_; ++n)
+        {
+            QList<QPointF> points; 
+            double freq = n * mSampleRate_ / ((mFFTSize_ + 1) * 2);
+            points.emplace_back(freq, 0.0);
+            points.emplace_back(freq, 0.0);
+
+            auto* line = new QLineSeries();
+            mLines_.emplace_back(std::make_tuple(line, points));
+            this->addOneLineSeries(line);
+        }
+    }
+
+    FFTWavePlotter::~FFTWavePlotter()
+    {
+        for (auto& [line, _] : mLines_)
+        {
+            delete line;
         }
     }
 
     void FFTWavePlotter::setAxisXScale(Frequency freqMax)
     {
         WavePlotter::setAxisXScale(0, static_cast<std::size_t>(freqMax));
-        for (auto& mBuf_ : mData_)
-        {
-            mBuf_.resize(static_cast<std::size_t>(mAxisX_.max()));
-        }
     }
 
     void FFTWavePlotter::update()
     {
-        for (int i = 0; i < mData_.size(); ++i)
+        for (std::size_t n = 0; n < mFFTSize_; ++n)
         {
-            auto& real = this->real(i); auto& im = this->im(i);
-            for (int n = 0; n < mData_[i].size(); ++n)
+            float fftval = 0.0;
+            for (std::size_t i = 0; i < mChannelNum_; ++i)
             {
-                double freq = n * mSampleRate_ / ((real.size() + 1) * 2);
-                double fftval = mYMin_ + ((int)(POW2(real[n]) + POW2(im[n])) % (int)(mYMax_ - mYMin_));
-                mData_[i][n].setX(freq);
-                mData_[i][n].setY(fftval);
+                fftval += (POW2(real(i)[n]) + POW2(im(i)[n]));
             }
-            mLineSeries_[i].replace(mData_[i]);
+            fftval /= mChannelNum_;
+            auto& [line, points] = mLines_[n];
+            points.back().setY(mYMin_ + (std::size_t)fftval % (std::size_t)(mYMax_ - mYMin_));
+            line->replace(points);
         }
     }
 }   // namespace eegneo
