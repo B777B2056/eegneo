@@ -10,39 +10,24 @@ namespace eegneo
 {
     namespace utils
     {
-        class IpcServer
+        class IpcWrapper
         {
         public:
-            IpcServer();
-            ~IpcServer();
+            IpcWrapper();
+            ~IpcWrapper();
 
             bool start();
+
+            void setMainProcess() { this->mIsMainProcess_ = true; }
 
             template<typename Cmd>
             void setCmdHandler(std::function<void(Cmd*)> handler)
             {
-                mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](EmptyCmd* baseCmd)->void
+                mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](detail::AbstractCmd* baseCmd)->void
                 {
                     handler(static_cast<Cmd*>(baseCmd));
                 };
             }
-
-        private:
-            QLocalServer mSvr_;
-            QLocalSocket* mChannelPtr_;
-            std::unordered_map<CmdId, std::function<void(EmptyCmd*)>> mHandlers_;
-
-            void handleMsg();
-            bool readBytes(char* buf, std::uint16_t bytesLength);
-        };
-
-        class IpcClient
-        {
-        public:
-            IpcClient();
-            ~IpcClient();
-
-            bool start();
 
             template<typename Cmd>
             void sendCmd(const Cmd& cmd)
@@ -56,16 +41,22 @@ namespace eegneo
                 std::int64_t bytesTransferred = 0;
                 do
                 {
-                    std::int64_t t = mChannel_.write(buf + bytesTransferred, len - bytesTransferred);
+                    std::int64_t t = mChannelPtr_->write(buf + bytesTransferred, len - bytesTransferred);
                     if (!t) break;
                     bytesTransferred += t;
                 } while (bytesTransferred < len);
-                mChannel_.waitForBytesWritten();
-                mChannel_.flush();
+                mChannelPtr_->waitForBytesWritten();
+                mChannelPtr_->flush();
             }
 
         private:
-            QLocalSocket mChannel_;
+            bool mIsMainProcess_;
+            QLocalServer mSvr_;
+            QLocalSocket* mChannelPtr_;
+            std::unordered_map<CmdId, std::function<void(detail::AbstractCmd*)>> mHandlers_;
+
+            void handleMsg();
+            bool readBytes(char* buf, std::uint16_t bytesLength);
         };
     }   // namespace utils
 }   // namespace eegneo

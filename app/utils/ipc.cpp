@@ -16,41 +16,53 @@ namespace eegneo
 
     namespace utils
     {
-        IpcServer::IpcServer()  : mChannelPtr_(nullptr)
+        IpcWrapper::IpcWrapper() 
+            : mIsMainProcess_(false), mChannelPtr_(nullptr)
         {
-            
+            QObject::connect(&mSvr_, &QLocalServer::newConnection, [this]()->void
+            { 
+                mChannelPtr_ = mSvr_.nextPendingConnection();
+                QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
+            });
         }
 
-        IpcServer::~IpcServer()
+        IpcWrapper::~IpcWrapper()
         {
+            if (!mIsMainProcess_)
+            {
+                mChannelPtr_->disconnectFromServer();
+                delete mChannelPtr_;
+            }
             mSvr_.close();
         }
 
-        bool IpcServer::start()
+        bool IpcWrapper::start()
         {
-            if (mSvr_.listen(IPC_NAME))
+            if (this->mIsMainProcess_)
             {
-                if (mSvr_.waitForNewConnection(-1))
-                {
-                    mChannelPtr_ = mSvr_.nextPendingConnection();
-                    QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
-                    return true;
-                }
+                return mSvr_.listen(IPC_NAME);
             }
-            return false;
+            else
+            {
+                mChannelPtr_ = new QLocalSocket();
+                mChannelPtr_->connectToServer(IPC_NAME);
+                QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
+                return mChannelPtr_->waitForConnected(-1);
+            }
         }
 
-        void IpcServer::handleMsg()
+        void IpcWrapper::handleMsg()
         {
             if (!mChannelPtr_->bytesAvailable())
             {
                 return;
             }
             CmdHeader cmdHdr;
-            if (!this->readBytes((char*)&cmdHdr, sizeof(cmdHdr)))
+            if (!this->readBytes((char*)&cmdHdr, sizeof(cmdHdr)) || (CmdId::Invalid == cmdHdr.id))
             {
                 return;
             }
+
             switch (cmdHdr.id)
             {
             case CmdId::Record:
@@ -65,12 +77,18 @@ namespace eegneo
             case CmdId::Marker:
                 ReadAndHandler(Marker);
                 break;
+            case CmdId::FileSave:
+                ReadAndHandler(FileSave);
+                break;
+            case CmdId::FileSavedFinished:
+                ReadAndHandler(FileSavedFinished);
+                break;
             default:
                 break;
             }
         }
 
-        bool IpcServer::readBytes(char* buf, std::uint16_t bytesLength)
+        bool IpcWrapper::readBytes(char* buf, std::uint16_t bytesLength)
         {   
             std::uint16_t bytesReceived = 0;    
             do  
@@ -80,29 +98,6 @@ namespace eegneo
                 bytesReceived += t; 
             } while (bytesReceived < bytesLength);   
             return true;
-        }
-
-        IpcClient::IpcClient()
-        {
-
-        }
-
-        IpcClient::~IpcClient()
-        {
-            mChannel_.disconnectFromServer();
-        }
-
-        bool IpcClient::start()
-        {
-            mChannel_.connectToServer(IPC_NAME);
-            if (mChannel_.waitForConnected(-1))
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
         }
     }   // namespace utils
 }   // namespace eegneo

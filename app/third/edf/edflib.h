@@ -521,7 +521,7 @@ int edf_set_recording_additional(int handle, const char *recording_additional);
 /* and before the first sample write action */
 
 
-int edfwrite_physical_samples(int handle, double *buf);
+int edfwrite_physical_samples(int handle, const double *buf);
 
 /* Writes n physical samples (uV, mA, Ohm) from *buf belonging to one signal */
 /* where n is the samplefrequency of that signal. */
@@ -535,7 +535,7 @@ int edfwrite_physical_samples(int handle, double *buf);
 /* Returns 0 on success, otherwise -1 */
 
 
-int edf_blockwrite_physical_samples(int handle, double *buf);
+int edf_blockwrite_physical_samples(int handle, const double *buf);
 
 /* Writes physical samples (uV, mA, Ohm) from *buf */
 /* buf must be filled with samples from all signals, starting with n samples of signal 0, n samples of signal 1, n samples of signal 2, etc. */

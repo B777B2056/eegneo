@@ -6,7 +6,7 @@
 
 namespace eegneo
 {
-    constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";
+    constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data";
     constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";
 
     EEGDataSampler::EEGDataSampler(std::size_t channelNum)

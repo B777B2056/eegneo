@@ -16,22 +16,20 @@ QT_END_NAMESPACE
 #define GRAPH_FRESH 50  // 触发波形显示定时器的时间，单位为ms
 #define MANUAL_MAKER 4 // 手动Mark数量
 
-class QTcpSocket;
-
 /* 文件保存相关 */
-struct FileInfo
-{
-    int eventCount = 0; // 事件数量计数器
-    long long curLine = 0;  // 数据缓存txt当前行数（用于计算marker标记的时间）
-    bool isRec = false;  // 是否开始记录数据
-    bool isSaveP300BH = false;  // 是否保存P300行为学数据
-    int isFinish = -1;  // EDF文件写入操作是否完成(-1:未开始保存edf文件，0:正在保存edf文件，1:保存完毕)
-    QTime startTime;  // EDF文件开始记录数据的时间
-    int flag;  // 创建EDF文件时的标志位
-    std::ofstream samplesWrite;  // 8通道缓存txt文件输出流
-    std::string tempFiles;  // 临时文件路径
-    std::vector<std::string> channelNames;  // 通道名称
-};
+// struct FileInfo
+// {
+//     int eventCount = 0; // 事件数量计数器
+//     long long curLine = 0;  // 数据缓存txt当前行数（用于计算marker标记的时间）
+//     bool isRec = false;  // 是否开始记录数据
+//     bool isSaveP300BH = false;  // 是否保存P300行为学数据
+//     int isFinish = -1;  // EDF文件写入操作是否完成(-1:未开始保存edf文件，0:正在保存edf文件，1:保存完毕)
+//     QTime startTime;  // EDF文件开始记录数据的时间
+//     int flag;  // 创建EDF文件时的标志位
+//     std::ofstream samplesWrite;  // 8通道缓存txt文件输出流
+//     std::string tempFiles;  // 临时文件路径
+//     std::vector<std::string> channelNames;  // 通道名称
+// };
 
 class AcquisitionWindow : public QMainWindow
 {
@@ -62,10 +60,13 @@ private:
     void initFFTChart();
     // 设置信号与槽的连接关系
     void connectSignalAndSlot();
+    // 设置通道名称
+    void setChannelName();
     // 数据文件保存
-    void setFilePath(int s, QString& path);
+    void saveToEDFFormatFile();
+    void saveToBDFFormatFile();
     // 保存行为学数据
-    void saveBehavioralP300(const std::string path);
+    // void saveBehavioralP300(const std::string& path);
 
 private:
     QString mFileName_;
@@ -79,11 +80,12 @@ private:
     eegneo::EEGWavePlotter* mSignalChart_ = nullptr;
     eegneo::FFTWavePlotter* mFFTChart_ = nullptr;
     // 滤波相关
-    eegneo::utils::IpcClient* mIpcWriter_ = nullptr;
+    eegneo::utils::IpcWrapper* mIpcWrapper_ = nullptr;
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关
-    FileInfo _fileInfo;
+    bool mIsFileSaveFinished_;
+    QString mChannelNames_[64];
     // 视觉刺激实验中的图片总数量
     int _p300OddballImgNum;
     // UI
@@ -95,10 +97,8 @@ signals:
 
     /* 槽 */
 private slots:
-    // 保存为EDF+文件
-    void saveEdfPlus();
     // 保存为3个txt文档（样本数据点，事件信息，描述文档）
-    void saveTxt();
+    // void saveTxt();
     // oddball范式p300实验
-    void p300Oddball();
+    // void p300Oddball();
 };

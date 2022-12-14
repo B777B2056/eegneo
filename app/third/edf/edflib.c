@@ -4734,7 +4734,7 @@ int edf_blockwrite_digital_3byte_samples(int handle, void *buf)
 }
 
 
-int edfwrite_physical_samples(int handle, double *buf)
+int edfwrite_physical_samples(int handle, const double *buf)
 {
   int  i,
        error,
@@ -4913,7 +4913,7 @@ int edfwrite_physical_samples(int handle, double *buf)
 }
 
 
-int edf_blockwrite_physical_samples(int handle, double *buf)
+int edf_blockwrite_physical_samples(int handle, const double *buf)
 {
   int  i, j,
        error,

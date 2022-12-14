@@ -10,7 +10,7 @@ include_directories("inc")
 
 file(GLOB HEADERS "inc/*.h" "inc/*/*.h" "../utils/*.h")
 file(GLOB SOURCES "src/mainwindow.cpp" "src/*/*.cpp" "../utils/*.cpp" "../third/fft/*.cpp")
-file(GLOB EDFLIB_SOURCES "../third/edflib/*.c")
+file(GLOB EDFLIB_SOURCES "../third/edf/*.c")
 file(GLOB UI "ui/*.ui")
 
 add_executable(eegneo ${HEADERS} ${UI} "src/main.cpp" ${SOURCES} ${EDFLIB_SOURCES})

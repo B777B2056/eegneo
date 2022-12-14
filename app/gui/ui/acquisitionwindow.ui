@@ -397,7 +397,7 @@
      <string>数据保存</string>
     </property>
     <addaction name="actionEDF"/>
-    <addaction name="actionTXT"/>
+    <addaction name="actionBDF"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -454,7 +454,7 @@
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionEDF">
    <property name="text">
-    <string>edf+</string>
+    <string>edf</string>
    </property>
   </action>
   <action name="actionOther">
@@ -477,9 +477,9 @@
     <string>oddball</string>
    </property>
   </action>
-  <action name="actionTXT">
+  <action name="actionBDF">
    <property name="text">
-    <string>txt</string>
+    <string>bdf</string>
    </property>
   </action>
   <action name="action50uV">

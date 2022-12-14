@@ -22,7 +22,7 @@
 
 extern "C"
 {
-    #include "third/edflib/edflib.h"
+    #include "third/edf/edflib.h"
 }
 using namespace std;
 

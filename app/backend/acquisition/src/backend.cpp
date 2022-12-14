@@ -2,20 +2,28 @@
 #include "sampler.h"
 #include "utils/filter.h"
 #include "utils/fft.h"
+#include "utils/file.h"
 
 #define BUF_BYTES_LEN (this->mChannelNum_ * sizeof(double))
 
-static std::fstream debug_file{"E:/jr/eegneo/debug.txt", std::ios::out};
+#define InitIpcServer(ipcReader, CMDType)   \
+    do  \
+    {   \
+        mIpcWrapper_.setCmdHandler<eegneo::## CMDType## Cmd>([this](eegneo::## CMDType## Cmd* cmd)->void   \
+        {   \
+            this->handle##CMDType##Cmd(cmd);  \
+        });  \
+    }   \
+    while (0)
+
+// static std::fstream debug_file{"E:/jr/eegneo/debug.txt", std::ios::out};
 
 namespace eegneo
 {
-    constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";
-    constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";
-
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum)
         : mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum), mCurDataN_(0)
-        , mDataFile_{DATA_FILE_PATH, std::ios::out}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
+        , mDataFile_{DATA_FILE_PATH, std::ios::out | std::ios::binary}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
         , mSharedMemory_{"Sampler"}
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
         , mFFT_(new utils::FFTCalculator[channelNum])
@@ -24,6 +32,8 @@ namespace eegneo
         {
             // TODO: 文件创建失败，处理
         }
+        mDataFile_.seekg(0, std::ios::beg);
+        mEventFile_.seekg(0, std::ios::beg);
         if (mSharedMemory_.attach())
         {
             mSharedMemory_.detach();
@@ -31,6 +41,18 @@ namespace eegneo
         if (!mSharedMemory_.create(10240))
         {
             throw "Shared memory create failed!";
+        }
+
+        InitIpcServer(mIpcWrapper_, Record);
+        InitIpcServer(mIpcWrapper_, Filt);
+        InitIpcServer(mIpcWrapper_, Shutdown);
+        InitIpcServer(mIpcWrapper_, Marker);
+        InitIpcServer(mIpcWrapper_, FileSave);
+
+        // 连接主进程
+        if (!mIpcWrapper_.start())
+        {
+
         }
     }
 
@@ -74,6 +96,15 @@ namespace eegneo
         this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
     }
 
+    void AcquisitionBackend::handleFileSaveCmd(FileSaveCmd* cmd)
+    {
+        eegneo::utils::EDFWritter writter{cmd->filePath, cmd->channelNum, cmd->fileType};
+        writter.setSampleFreqencyHz(cmd->sampleRate);
+        writter.saveRecordData();
+        writter.saveAnnotation();
+        this->mIpcWrapper_.sendCmd(FileSavedFinishedCmd{});
+    }
+
     void AcquisitionBackend::doSample()
     {
         mDataSampler_->sampleOnce();
@@ -88,11 +119,7 @@ namespace eegneo
     void AcquisitionBackend::doRecord()
     {
         if (!mRecCmd_.isRecordOn) return;
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            mDataFile_ << mDataSampler_->data()[i] << " ";
-        }
-        mDataFile_ << "\n";
+        mDataFile_.write(reinterpret_cast<const char*>(this->mDataSampler_->data()), BUF_BYTES_LEN);
         ++mCurDataN_;
     }
 
