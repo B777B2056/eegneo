@@ -5,7 +5,6 @@
 #include <QDateTime>
 #include <QSharedMemory>
 #include <QStringList>
-#include <QTcpSocket>
 #include <map>
 #include <vector>
 #include <sstream>
@@ -13,15 +12,7 @@
 #include <memory>
 #include "settings/setinfo.h"
 #include "settings/setchannelname.h"
-#include "erp/p300.h"
 #include "settings/choosecom.h"
-
-#include <iostream>
-
-extern "C"
-{
-    #include "third/edf/edflib.h"
-}
 
 #if _MSC_VER >= 1600
 #pragma execution_character_set("utf-8")
@@ -48,13 +39,15 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     mIpcWrapper_->setCmdHandler<eegneo::FileSavedFinishedCmd>([this](eegneo::FileSavedFinishedCmd* cmd)->void
     {
         this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
-        std::cout << "file save ok!!!\n";
+        QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
     });
+
     if (!mIpcWrapper_->start())
     {
         //TODO
         return;
     }
+
     this->connectSignalAndSlot();
 }
 
@@ -280,7 +273,7 @@ void AcquisitionWindow::saveToBDFFormatFile()
     mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 
-// 保存行为学数据
+// P300实验结束后保存行为学数据
 // void AcquisitionWindow::saveBehavioralP300(const std::string& path)
 // {
 //     int col = 0;

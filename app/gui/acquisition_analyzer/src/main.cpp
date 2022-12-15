@@ -2,7 +2,6 @@
 #include "mainwindow.h"
 #include "acquisition/acquisitionwindow.h"
 #include "analysis/preprocesswindow.h"
-#include "erp/p300.h"
 
 int main(int argc, char *argv[])
 {   
