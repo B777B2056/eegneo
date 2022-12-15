@@ -31,3 +31,9 @@ void MainWindow::covert2AnalysisImpl()
     this->hide();
     emit covert2Analysis();
 }
+
+void MainWindow::covert2ERPImpl()
+{
+    this->hide();
+    emit covert2ERP();
+}

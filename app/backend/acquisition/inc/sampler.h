@@ -3,6 +3,8 @@
 #include <QString>
 #include <QUdpSocket>
 #include <QTimer>
+#include <fstream>
+#include "utils/file.h"
 
 namespace eegneo
 {
@@ -18,12 +20,23 @@ namespace eegneo
         EEGDataSampler& operator=(EEGDataSampler&&) = default;
         virtual ~EEGDataSampler() { delete[] mBuf_; }
 
-        virtual void sampleOnce() = 0;
+        void doRecordEvent(const char* msg);
+
         const double* data() const { return mBuf_; }
+
+        void setRecordingFlag() { this->mIsRecord_ = true; }
+        void clearRecordingFlag() { this->mIsRecord_ = false; }
 
     protected:
         double* mBuf_;
         std::size_t mChannelNum_;
+
+        bool mIsRecord_;
+        std::uint64_t mCurDataN_; 
+        std::fstream mDataFile_, mEventFile_;
+
+        void doRecordData();
+        virtual void sampleOnce() = 0;
     };
 
     class TestDataSampler : public EEGDataSampler
@@ -32,14 +45,13 @@ namespace eegneo
         TestDataSampler(std::size_t channelNum);
         ~TestDataSampler() = default;
 
-        void sampleOnce() override;
-
     private:
         QTimer timer;
-        constexpr static double pi = 3.1415926535;
-        // std::fstream mDataFile_;
+        int idx = 0;
+        const char* DATA_FILE_PATH = "E:/jr/eegneo/test/data/AL0020_wuxin_2020-12-17_18-31-21_Segment_0.edf";
+        utils::EDFReader mEDFReader_;
 
-        // const char* DATA_FILE_PATH = "";
+        void sampleOnce() override;
     };
 
     class ShanghaiDataSampler : public EEGDataSampler
@@ -47,8 +59,6 @@ namespace eegneo
     public:
         ShanghaiDataSampler(std::size_t channelNum, const QString& portName);
         ~ShanghaiDataSampler();
-
-        void sampleOnce() override;
 
     private:
         QString mPortName_;
@@ -58,6 +68,8 @@ namespace eegneo
         void sendStartCmd();
         void handle();
         double turnBytes2uV(char byte1, char byte2, char byte3);
+
+        void sampleOnce() override;
 
     private:
         static constexpr double MAGIC_COFF = 0.022351744455307063;
@@ -69,10 +81,10 @@ namespace eegneo
         ShanxiDataSampler(std::size_t channelNum);
         ~ShanxiDataSampler() = default;
 
-        void sampleOnce() override;
-
     private:
         QUdpSocket client;
         double turnBytes2uV(unsigned char *bytes);
+
+        void sampleOnce() override;
     };
 }   // namespace eegneo

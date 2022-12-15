@@ -27,16 +27,17 @@ extern "C"
 #pragma execution_character_set("utf-8")
 #endif
 
-namespace
-{
-    constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe";
-}
+#define FILE_SAVE_NOT_START 1
+#define FILE_SAVE_IN_PROCESS 2
+#define FILE_SAVE_FINISHED 3
+
+constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe";
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
     , mPlotTimer_(new QTimer(this))
-    , mIsFileSaveFinished_(false)
+    , mFileSaveFinishedFlag_(FILE_SAVE_NOT_START)
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
@@ -46,7 +47,7 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     mIpcWrapper_->setMainProcess();
     mIpcWrapper_->setCmdHandler<eegneo::FileSavedFinishedCmd>([this](eegneo::FileSavedFinishedCmd* cmd)->void
     {
-        this->mIsFileSaveFinished_ = true;
+        this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
         std::cout << "file save ok!!!\n";
     });
     if (!mIpcWrapper_->start())
@@ -54,7 +55,6 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
         //TODO
         return;
     }
-
     this->connectSignalAndSlot();
 }
 
@@ -196,7 +196,7 @@ void AcquisitionWindow::connectSignalAndSlot()
 
     QObject::connect(ui->pushButton, &QPushButton::clicked, [this]()->void
     {
-        if(!this->mIsFileSaveFinished_)
+        if(FILE_SAVE_IN_PROCESS == this->mFileSaveFinishedFlag_)
         {
             QMessageBox::critical(this, tr("错误"), "数据正在写入文件", QMessageBox::Ok);
         }
@@ -264,6 +264,7 @@ void AcquisitionWindow::saveToEDFFormatFile()
     cmd.fileType = eegneo::EDFFileType::EDF;
     ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
     mIpcWrapper_->sendCmd(cmd);
+    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 
 void AcquisitionWindow::saveToBDFFormatFile()
@@ -276,150 +277,8 @@ void AcquisitionWindow::saveToBDFFormatFile()
     cmd.fileType = eegneo::EDFFileType::BDF;
     ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
     mIpcWrapper_->sendCmd(cmd);
+    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
-
-// 保存为3个txt文档（样本数据点，事件信息，描述文档）
-/*
-void AcquisitionWindow::saveTxt()
-{
-    QFileInfo samples_file(QString::fromStdString(_fileInfo.tempFiles) + "_samples.txt");
-    QFileInfo events_file(QString::fromStdString(_fileInfo.tempFiles) + "_events.txt");
-    if(!samples_file.isFile() || !events_file.isFile())
-    {
-        QMessageBox::critical(this, tr("错误"), "数据未记录，无法导出！", QMessageBox::Ok);
-        return;
-    }
-    _fileInfo.isFinish = 0;
-    QString txt_path;
-    std::string file_name = this->mFileName_.toStdString();
-    std::ifstream samples_read;  // 8通道缓存txt文件输入流
-    std::ofstream samples_txt;  // 数据点txt文件输出流
-    std::ifstream events_read;
-    std::ofstream events_txt_eeglab;  // eeglab风格
-    std::ofstream events_txt_brainstorm;  // brainstorm风格
-    ::TargetFilePathByUser(1, txt_path);
-    // 新建文件夹，把三个txt放入一个文件夹
-    if (QDir dir; !dir.exists(txt_path))
-    {
-        dir.mkpath(txt_path);
-    }
-    // 写入数据点
-    int col = 0;
-    samples_txt.open((txt_path.toStdString() + "\\" + file_name + "_samples.txt"));
-    samples_txt.close();
-    samples_read.open(_fileInfo.tempFiles + "_samples.txt");
-    samples_txt.open((txt_path.toStdString() + "\\" + file_name + "_samples.txt"), std::ios::app);
-    for(int i = 0; i < mChannelNum_; i++)
-    {
-        if(i < mChannelNum_ - 1)
-        {
-            samples_txt << _fileInfo.channelNames[i] << " ";
-        }
-        else
-        {
-            samples_txt << _fileInfo.channelNames[i] << std::endl;
-        }
-    }
-    while(samples_read.peek() != EOF)
-    {
-        std::string str;
-        std::getline(samples_read, str);
-        if(col)
-        {
-            samples_txt << str << std::endl;
-        }
-        ++col;
-    }
-    samples_txt.close();
-    samples_read.close();
-    // 写入事件(EEGLAB风格)
-    col = 0;
-    events_txt_eeglab.open((txt_path.toStdString() + "\\" + file_name + "_events(eeglab).txt"));
-    events_txt_eeglab.close();
-    events_read.open(_fileInfo.tempFiles + "_events.txt");
-    events_txt_eeglab.open((txt_path.toStdString() + "\\" + file_name + "_events(eeglab).txt"), std::ios::app);
-    while(events_read.peek() != EOF)
-    {
-        std::string str;
-        std::getline(events_read, str);
-        if(col)
-        {
-            long long run_time;
-            std::string event;
-            std::stringstream ss(str);
-            ss >> run_time >> event;
-            events_txt_eeglab << (double)run_time / 10000.0 << " " << event << std::endl;
-        }
-        else
-        {
-            events_txt_eeglab << str << std::endl;
-        }
-        ++col;
-    }
-    events_txt_eeglab.close();
-    events_read.close();
-    // 写入事件(Brainstorm风格)
-    col = 0;
-    events_txt_brainstorm.open((txt_path.toStdString() + "\\" + file_name + "_events(brainstorm).txt"));
-    events_txt_brainstorm.close();
-    events_read.open(_fileInfo.tempFiles + "_events.txt");
-    events_txt_brainstorm.open((txt_path.toStdString() + "\\" + file_name + "_events(brainstorm).txt"), std::ios::app);
-    while(events_read.peek() != EOF)
-    {
-        std::string str;
-        std::getline(events_read, str);
-        if(col)
-        {
-            long long run_time;
-            std::string event;
-            std::stringstream ss(str);
-            ss >> run_time >> event;
-            events_txt_brainstorm << event << "," << (double)run_time / 10000.0 << "," << 0.1 << std::endl;
-        }
-        ++col;
-    }
-    events_txt_brainstorm.close();
-    events_read.close();
-    // 写描述性文件文件
-    std::ofstream readme;
-    readme.open(txt_path.toStdString() + "\\" + file_name + "_readme.txt");
-    readme.close();
-    readme.open(txt_path.toStdString() + "\\" + file_name + "_readme.txt", std::ios::app);
-    readme << "Data sampling rate: " << mSampleRate_ << std::endl;
-    readme << "Number of channels: " << mChannelNum_ << std::endl;
-    readme << "Input field(column) names: latency type" << std::endl;
-    readme << "Number of file header lines: 1" << std::endl;
-    readme << "Time unit(sec): 1" << std::endl;
-    readme.close();
-    // 保存行为学数据
-    if(_fileInfo.isSaveP300BH)
-    {
-        saveBehavioralP300(txt_path.toStdString());
-    }
-    _fileInfo.isFinish = 1;
-}
-*/
-
-// p300 Oddball范式
-// void AcquisitionWindow::p300Oddball()
-// {
-//     // 弹窗提示用户本实验相关信息
-//     QMessageBox::StandardButton reply;
-//     reply = QMessageBox::information(this, tr("p300-oddball"),
-//                                     "实验名称：P300诱发电位刺激\n"
-//                                     "实验范式：Oddball\n"
-//                                     "实验内容：数字2与数字8交替闪烁。",
-//                                     QMessageBox::Ok);
-//     if(reply == QMessageBox::Ok)
-//     {
-//         _fileInfo.isSaveP300BH = true;
-//         // 进入实验
-//         P300Oddball *p = new P300Oddball();
-//         QObject::connect(p, &P300Oddball::sendImgNum, [this](int n)->void{ this->_p300OddballImgNum = n; });
-//         QObject::connect(p, &P300Oddball::sendMark, [this](const QString& text)->void{ this->createMark(text); });
-//         p->show();
-//     }
-// }
 
 // 保存行为学数据
 // void AcquisitionWindow::saveBehavioralP300(const std::string& path)

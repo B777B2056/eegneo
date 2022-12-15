@@ -22,18 +22,11 @@ namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum)
         : mDataSampler_(new TestDataSampler(channelNum))
-        , mChannelNum_(channelNum), mCurDataN_(0)
-        , mDataFile_{DATA_FILE_PATH, std::ios::out | std::ios::binary}, mEventFile_{EVENT_FILE_PATH, std::ios::out}
+        , mChannelNum_(channelNum)
         , mSharedMemory_{"Sampler"}
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
         , mFFT_(new utils::FFTCalculator[channelNum])
     {
-        if (!mDataFile_.is_open())
-        {
-            // TODO: 文件创建失败，处理
-        }
-        mDataFile_.seekg(0, std::ios::beg);
-        mEventFile_.seekg(0, std::ios::beg);
         if (mSharedMemory_.attach())
         {
             mSharedMemory_.detach();
@@ -67,14 +60,20 @@ namespace eegneo
     void AcquisitionBackend::run()
     {
         this->doSample(); 
-        this->doRecord(); 
         this->doFilt();
         this->doFFT(); 
     }
 
     void AcquisitionBackend::handleRecordCmd(RecordCmd* cmd)
     {
-        this->mRecCmd_ = *cmd;   // 设置记录参数
+        if (cmd->isRecordOn)
+        {
+            mDataSampler_->setRecordingFlag();
+        }
+        else
+        {
+            mDataSampler_->clearRecordingFlag();
+        }
     }
 
     void AcquisitionBackend::handleFiltCmd(FiltCmd* cmd)
@@ -93,7 +92,7 @@ namespace eegneo
 
     void AcquisitionBackend::handleMarkerCmd(MarkerCmd* cmd)
     {
-        this->mEventFile_ << this->mCurDataN_ << ":" << cmd->msg << std::endl;
+        mDataSampler_->doRecordEvent(cmd->msg);
     }
 
     void AcquisitionBackend::handleFileSaveCmd(FileSaveCmd* cmd)
@@ -107,20 +106,12 @@ namespace eegneo
 
     void AcquisitionBackend::doSample()
     {
-        mDataSampler_->sampleOnce();
         if (!mFiltCmd_.isFiltOn)
         {   
             if (!mSharedMemory_.lock()) return;
             ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), BUF_BYTES_LEN);
             mSharedMemory_.unlock();
         }
-    }
-
-    void AcquisitionBackend::doRecord()
-    {
-        if (!mRecCmd_.isRecordOn) return;
-        mDataFile_.write(reinterpret_cast<const char*>(this->mDataSampler_->data()), BUF_BYTES_LEN);
-        ++mCurDataN_;
     }
 
     void AcquisitionBackend::doFilt()

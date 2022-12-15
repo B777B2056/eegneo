@@ -15,10 +15,12 @@ public:
 
     void covert2AccquisitionImpl();
     void covert2AnalysisImpl();
+    void covert2ERPImpl();
 
 signals:
     void covert2Accquisition();
     void covert2Analysis();
+    void covert2ERP();
 
 private:
     Ui::MainWindow *ui;

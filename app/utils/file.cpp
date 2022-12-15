@@ -1,6 +1,6 @@
 #include "file.h"
 #include <fstream>
-#include <chrono>  
+#include <iostream>  
 extern "C" 
 { 
 #include "third/edf/edflib.h" 
@@ -30,7 +30,7 @@ namespace eegneo
         void EDFReader::loadFile(const char* filePath)
         {
             struct edf_hdr_struct edfhdr;
-            int fp = ::edfopen_file_readonly(filePath, &edfhdr,  EDFLIB_READ_ANNOTATIONS);
+            int fp = ::edfopen_file_readonly(filePath, &edfhdr, EDFLIB_READ_ANNOTATIONS);
             if (-1 == fp)
             {
                 // TODO: ERROR HANDLE
@@ -38,10 +38,12 @@ namespace eegneo
             }
             // 读取通道数
             this->mChannelNum_ = edfhdr.edfsignals; 
+            std::cout << "channel count: " << this->mChannelNum_ << "\n"; 
             this->mData_.resize(this->mChannelNum_);
             this->mChannelNames_.resize(this->mChannelNum_);
             //读取采样率
             this->mSampleFreqencyHz_ = edfhdr.signalparam[0].smp_in_datarecord/(edfhdr.datarecord_duration/10000000);
+            std::cout << this->mSampleFreqencyHz_ << "Hz\n";
             // 读取数据
             for (int i = 0; i < edfhdr.edfsignals; ++i)
             {
@@ -116,8 +118,7 @@ namespace eegneo
         void EDFWritter::writeChannelOneSecond(const std::vector<double>& channelData)
         {
             if (-1 == this->mFp_)   return;
-            int f = ::edf_blockwrite_physical_samples(this->mFp_, channelData.data());
-            debug_file << "edf_blockwrite_physical_samples: " << f << std::endl;
+            ::edf_blockwrite_physical_samples(this->mFp_, channelData.data());
         }
 
         void EDFWritter::writeAnnotations(const std::vector<EEGAnnotation>& annotations)

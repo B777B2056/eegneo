@@ -11,30 +11,72 @@ namespace eegneo
 
     EEGDataSampler::EEGDataSampler(std::size_t channelNum)
         : mBuf_(new double[channelNum]), mChannelNum_(channelNum)
+        , mIsRecord_(false), mCurDataN_(0)
+        , mDataFile_{DATA_FILE_PATH, std::ios::out | std::ios::binary}
+        , mEventFile_{EVENT_FILE_PATH, std::ios::out}
     {
-        
+        if (!mDataFile_.is_open())
+        {
+            // TODO: 文件创建失败，处理
+        }
+        mDataFile_.seekg(0, std::ios::beg);
+        mEventFile_.seekg(0, std::ios::beg);
     }
 
-    static int t = 0;
+    void EEGDataSampler::doRecordData()
+    {
+        if (!mIsRecord_)    return;
+        mDataFile_.write(reinterpret_cast<const char*>(mBuf_), this->mChannelNum_ * sizeof(double));
+        ++mCurDataN_;
+    }
+
+    void EEGDataSampler::doRecordEvent(const char* msg)
+    {
+        this->mEventFile_ << this->mCurDataN_ << ":" << msg << std::endl;
+    }
+
+    static double maxInVector(const std::vector<double>& vec)
+    {
+        double ret = vec[0];
+        for (std::size_t i = 1; i < vec.size(); ++i)
+        {
+            if (vec[i] > ret)   ret = vec[i];
+        }
+        return ret;
+    }
+
+    static double minInVector(const std::vector<double>& vec)
+    {
+        double ret = vec[0];
+        for (std::size_t i = 1; i < vec.size(); ++i)
+        {
+            if (vec[i] < ret)   ret = vec[i];
+        }
+        return ret;
+    }
 
     TestDataSampler::TestDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
-        // , mDataFile_{DATA_FILE_PATH, std::ios::in}
+        , mEDFReader_(DATA_FILE_PATH)
     {
-        // if (!mDataFile_.is_open())
-        // {
-        //     throw "Data file not open!";
-        // }
-        QObject::connect(&timer, &QTimer::timeout, [this]()->void
+        std::vector<double> maxV, minV;
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            maxV.push_back(maxInVector(mEDFReader_.channel(i)));
+            minV.push_back(minInVector(mEDFReader_.channel(i)));
+        }
+        QObject::connect(&timer, &QTimer::timeout, [this, maxV, minV]()->void
         {
             for (std::size_t i = 0; i < mChannelNum_; ++i)
             {
-                // mBuf_[i] = 2+3*cos(2*pi*50.0*t-pi*30.0/180.0)+1.5*cos(2*pi*75.0*t+pi*90.0/180.0);
-                mBuf_[i] = 3.0*std::abs(cos(t*pi/180.0) + cos((1/13.0)+t*pi/180.0));
+                double tmp = mEDFReader_.channel(i)[idx % mEDFReader_.channel(i).size()];
+                double k = 10.0 / (maxV[i] - minV[i]);
+                mBuf_[i] = k * (tmp - minV[i]);
             }
-            ++t;
+            ++idx;
+            this->doRecordData();
         });
-        timer.start(1000.0/256.0);
+        timer.start(1000.0/mEDFReader_.sampleFreqencyHz());
     }
 
     void TestDataSampler::sampleOnce()

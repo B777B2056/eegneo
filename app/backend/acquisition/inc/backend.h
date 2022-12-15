@@ -29,12 +29,8 @@ namespace eegneo
         EEGDataSampler* mDataSampler_;
         std::size_t mChannelNum_;
 
-        std::uint64_t mCurDataN_; 
-        std::fstream mDataFile_, mEventFile_;
-
         QSharedMemory mSharedMemory_;
 
-        RecordCmd mRecCmd_; 
         FiltCmd mFiltCmd_;
 
         utils::Filter* mFilter_; 
@@ -43,7 +39,6 @@ namespace eegneo
         utils::FFTCalculator* mFFT_;
 
         void doSample();
-        void doRecord();
         void doFilt();
         void doFFT();
 

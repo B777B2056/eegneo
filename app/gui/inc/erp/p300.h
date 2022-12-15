@@ -24,7 +24,10 @@ public:
     explicit P300Oddball(QWidget *parent = nullptr);
     ~P300Oddball();
 
+    void show();
+
 signals:
+    void closeAll();// 返回主界面
     void sendImgNum(int);
     void sendMark(const QString& event);
 

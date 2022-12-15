@@ -14,6 +14,22 @@ P300Oddball::P300Oddball(QWidget *parent)
     QPalette palette(this->palette());
     palette.setColor(QPalette::Window, Qt::black);
     setPalette(palette);
+    
+    // 显示准备界面
+    ui->label->setAlignment(Qt::AlignCenter);
+    ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/gotask.jpg"));
+    ui->label->show();
+    // 全屏显示
+//    this->showFullScreen();
+}
+
+P300Oddball::~P300Oddball()
+{
+    delete ui;
+}
+
+void P300Oddball::show()
+{
     // 显示实验参数设置对话框
     QMessageBox::StandardButton reply;
     reply = QMessageBox::question(this, tr("实验参数设置"),
@@ -71,17 +87,7 @@ P300Oddball::P300Oddball(QWidget *parent)
     }
     // 发送图片总数量至采集界面
     emit sendImgNum(num_img);
-    // 显示准备界面
-    ui->label->setAlignment(Qt::AlignCenter);
-    ui->label->setPixmap(QPixmap("../EEG_Acquisition_GUI/p300/oddball/gotask.jpg"));
-    ui->label->show();
-    // 全屏显示
-//    this->showFullScreen();
-}
-
-P300Oddball::~P300Oddball()
-{
-    delete ui;
+    QWidget::show();
 }
 
 void P300Oddball::keyPressEvent(QKeyEvent *event)

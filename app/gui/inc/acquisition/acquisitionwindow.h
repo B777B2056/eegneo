@@ -16,21 +16,6 @@ QT_END_NAMESPACE
 #define GRAPH_FRESH 50  // 触发波形显示定时器的时间，单位为ms
 #define MANUAL_MAKER 4 // 手动Mark数量
 
-/* 文件保存相关 */
-// struct FileInfo
-// {
-//     int eventCount = 0; // 事件数量计数器
-//     long long curLine = 0;  // 数据缓存txt当前行数（用于计算marker标记的时间）
-//     bool isRec = false;  // 是否开始记录数据
-//     bool isSaveP300BH = false;  // 是否保存P300行为学数据
-//     int isFinish = -1;  // EDF文件写入操作是否完成(-1:未开始保存edf文件，0:正在保存edf文件，1:保存完毕)
-//     QTime startTime;  // EDF文件开始记录数据的时间
-//     int flag;  // 创建EDF文件时的标志位
-//     std::ofstream samplesWrite;  // 8通道缓存txt文件输出流
-//     std::string tempFiles;  // 临时文件路径
-//     std::vector<std::string> channelNames;  // 通道名称
-// };
-
 class AcquisitionWindow : public QMainWindow
 {
     Q_OBJECT
@@ -65,8 +50,6 @@ private:
     // 数据文件保存
     void saveToEDFFormatFile();
     void saveToBDFFormatFile();
-    // 保存行为学数据
-    // void saveBehavioralP300(const std::string& path);
 
 private:
     QString mFileName_;
@@ -84,21 +67,13 @@ private:
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关
-    bool mIsFileSaveFinished_;
+    int mFileSaveFinishedFlag_;
     QString mChannelNames_[64];
     // 视觉刺激实验中的图片总数量
     int _p300OddballImgNum;
     // UI
     Ui::AcquisitionWindow *ui;
 
-    /* 信号 */
 signals:
     void closeAll();// 返回主界面
-
-    /* 槽 */
-private slots:
-    // 保存为3个txt文档（样本数据点，事件信息，描述文档）
-    // void saveTxt();
-    // oddball范式p300实验
-    // void p300Oddball();
 };
