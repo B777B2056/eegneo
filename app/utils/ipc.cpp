@@ -1,70 +1,97 @@
 #include "ipc.h"
+#include <iostream>
 
 #define ReadAndHandler(CMDType) \
     do  \
     {   \
-        if (CMDType##Cmd cmd; this->readBytes((char*)&cmd, sizeof(cmd)))   \
+        if (CMDType##Cmd cmd; this->readBytes(channel, (char*)&cmd, sizeof(cmd)))   \
         {   \
-            this->mHandlers_[cmdHdr.id](&cmd);  \
+            this->mHandlers_[cmdHdr.cid](&cmd);  \
         }   \
     }   \
     while (0)
 
 namespace eegneo
 {
-    constexpr const char* IPC_NAME = "eegneo_ipc";
-
     namespace utils
     {
         IpcWrapper::IpcWrapper() 
-            : mIsMainProcess_(false), mChannelPtr_(nullptr)
+            : mIsMainProcess_(false), mSvr_(nullptr), mClt_(nullptr)
         {
-            QObject::connect(&mSvr_, &QLocalServer::newConnection, [this]()->void
-            { 
-                mChannelPtr_ = mSvr_.nextPendingConnection();
-                QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
-            });
+            
         }
 
         IpcWrapper::~IpcWrapper()
         {
-            if (!mIsMainProcess_)
+            if (mSvr_)
             {
-                mChannelPtr_->disconnectFromServer();
-                delete mChannelPtr_;
+                mSvr_->close();
+                delete mSvr_;
             }
-            mSvr_.close();
+            if (mClt_)
+            {
+                mClt_->disconnectFromHost();
+                delete mClt_;
+            }
+        }
+
+        void IpcWrapper::sendIdentifyInfo(SessionId sid)
+        {
+            CmdHeader cmdHdr;
+            cmdHdr.sid = sid;
+            cmdHdr.cid = CmdId::Init;
+            char* buf = reinterpret_cast<char*>(&cmdHdr);
+            std::int64_t bytesTransferred = 0;
+            do
+            {
+                std::int64_t t = mClt_->write(buf + bytesTransferred, sizeof(cmdHdr) - bytesTransferred);
+                if (!t) break;
+                bytesTransferred += t;
+            } while (bytesTransferred < sizeof(cmdHdr));
+            mClt_->waitForBytesWritten();
+            mClt_->flush();
         }
 
         bool IpcWrapper::start()
         {
             if (this->mIsMainProcess_)
             {
-                return mSvr_.listen(IPC_NAME);
+                mSvr_ = new QTcpServer();
+                QObject::connect(mSvr_, &QTcpServer::newConnection, [this]()->void
+                { 
+                    auto* channel = mSvr_->nextPendingConnection();
+                    QObject::connect(channel, &QTcpSocket::readyRead, [this, channel]()->void{ this->handleMsg(channel); });
+                });
+                return mSvr_->listen(QHostAddress::Any, IPC_SVR_PORT);
             }
             else
             {
-                mChannelPtr_ = new QLocalSocket();
-                mChannelPtr_->connectToServer(IPC_NAME);
-                QObject::connect(mChannelPtr_, &QLocalSocket::readyRead, [this]()->void{ this->handleMsg(); });
-                return mChannelPtr_->waitForConnected(-1);
+                mClt_ = new QTcpSocket();
+                QObject::connect(mClt_, &QTcpSocket::connected, [this]()->void
+                {
+                    QObject::connect(mClt_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(mClt_); });
+                });
+                mClt_->connectToHost(IPC_SVR_ADDR, IPC_SVR_PORT);
+                return true;
             }
         }
 
-        void IpcWrapper::handleMsg()
+        void IpcWrapper::handleMsg(QTcpSocket* channel)
         {
-            if (!mChannelPtr_->bytesAvailable())
+            if (!channel->bytesAvailable())
             {
                 return;
             }
             CmdHeader cmdHdr;
-            if (!this->readBytes((char*)&cmdHdr, sizeof(cmdHdr)) || (CmdId::Invalid == cmdHdr.id))
+            if (!this->readBytes(channel, (char*)&cmdHdr, sizeof(cmdHdr)) || (CmdId::Invalid == cmdHdr.cid))
             {
                 return;
             }
-
-            switch (cmdHdr.id)
+            switch (cmdHdr.cid)
             {
+            case CmdId::Init:
+                this->mSessions_[cmdHdr.sid] = channel;
+                break;
             case CmdId::Record:
                 ReadAndHandler(Record);
                 break;
@@ -88,12 +115,12 @@ namespace eegneo
             }
         }
 
-        bool IpcWrapper::readBytes(char* buf, std::uint16_t bytesLength)
+        bool IpcWrapper::readBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength)
         {   
             std::uint16_t bytesReceived = 0;    
             do  
             {   
-                int t = mChannelPtr_->read(buf + bytesReceived, bytesLength - bytesReceived);  
+                int t = channel->read(buf + bytesReceived, bytesLength - bytesReceived);  
                 if (-1 == t) return false;
                 bytesReceived += t; 
             } while (bytesReceived < bytesLength);   

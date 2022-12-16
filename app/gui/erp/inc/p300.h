@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include "utils/ipc.h"
 
 namespace Ui {
 class p300;
@@ -21,13 +22,14 @@ public:
     ~ErpP300OddballWindow();
 
 private:
-    enum IMG_LABEL
+    enum ImgLabel
     {
-        TWO = 2,
-        EIGHT = 8 
+        Stimulation = 2,
+        NonStimulation = 8 
     };
 
 private:
+    eegneo::utils::IpcWrapper mIpc_;
     double mStimulusImageRatio_;
     int mImagesInPracticeTotalCount_, mImagesInExperimentTotalCount_;
     int mCrossDurationMs_, mImageDurationMs_, mBlankDurationMsLowerBound_, mBlankDurationMsUpperBound_;
@@ -36,7 +38,7 @@ private:
     Ui::p300 *ui;
 
     void init();    // 从配置文件种读取参数
-    IMG_LABEL chooseImg(int imgNumRound) const;
+    ImgLabel chooseImg(int imgNumRound) const;
     void sendMarker(const char* msg);
     void playImagesRound(int imgNumRound);  // 播放图片
     void practiceEnd();

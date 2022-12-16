@@ -1,8 +1,9 @@
 ﻿#include "p300.h"
 #include "ui_p300.h"
 #include <chrono>
-#include <iostream>
+#include <cstring>
 #include <QString>
+#include "common/common.h"
 
 #if _MSC_VER >= 1600
 #pragma execution_character_set("utf-8")
@@ -16,6 +17,9 @@ ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     , ui(new Ui::p300)
 {
     ui->setupUi(this);
+    // 连接数据采集进程
+    mIpc_.start();
+    mIpc_.sendIdentifyInfo(eegneo::SessionId::ERPSession);
     // 设置全黑背景色
     QPalette palette(this->palette());
     palette.setColor(QPalette::Window, Qt::black);
@@ -80,7 +84,9 @@ void ErpP300OddballWindow::mousePressEvent(QMouseEvent *event)
 
 void ErpP300OddballWindow::sendMarker(const char* msg)
 {
-    std::cout << "marker: " << msg << std::endl;
+    eegneo::MarkerCmd cmd;
+    ::memcpy(cmd.msg, msg, std::strlen(msg));
+    mIpc_.sendCmd(eegneo::SessionId::ERPSession, cmd);
 }
 
 static void DelayMs(int ms)
@@ -91,16 +97,16 @@ static void DelayMs(int ms)
     }
 }
 
-ErpP300OddballWindow::IMG_LABEL ErpP300OddballWindow::chooseImg(int imgNumRound) const
+ErpP300OddballWindow::ImgLabel ErpP300OddballWindow::chooseImg(int imgNumRound) const
 {
     int n = std::rand() % imgNumRound;
     if((n < (int)(imgNumRound * this->mStimulusImageRatio_)) && (this->mStimulusImageCount_ < (int)(imgNumRound * this->mStimulusImageRatio_)))
     {
-        return TWO;
+        return Stimulation;
     }
     else
     {   
-        return EIGHT;
+        return NonStimulation;
     }
 }
 
@@ -113,7 +119,7 @@ void ErpP300OddballWindow::playImagesRound(int imgNumRound)
         ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "cross.png"));
         ::DelayMs(this->mCrossDurationMs_);
         // 数字显示周期（默认）：50ms
-        if(TWO == this->chooseImg(imgNumRound))
+        if(Stimulation == this->chooseImg(imgNumRound))
         {
             ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "2.bmp"));
             ++this->mStimulusImageCount_;

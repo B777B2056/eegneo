@@ -14,6 +14,8 @@
 #include "settings/setchannelname.h"
 #include "settings/choosecom.h"
 
+#include <iostream>
+
 #if _MSC_VER >= 1600
 #pragma execution_character_set("utf-8")
 #endif
@@ -21,8 +23,6 @@
 #define FILE_SAVE_NOT_START 1
 #define FILE_SAVE_IN_PROCESS 2
 #define FILE_SAVE_FINISHED 3
-
-constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe";
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -36,6 +36,12 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 
     mIpcWrapper_ = new eegneo::utils::IpcWrapper();
     mIpcWrapper_->setMainProcess();
+
+    mIpcWrapper_->setCmdHandler<eegneo::MarkerCmd>([this](eegneo::MarkerCmd* cmd)->void
+    {
+        this->createMark(cmd->msg);
+    });
+
     mIpcWrapper_->setCmdHandler<eegneo::FileSavedFinishedCmd>([this](eegneo::FileSavedFinishedCmd* cmd)->void
     {
         this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
@@ -96,7 +102,7 @@ void AcquisitionWindow::createMark(const QString& event)
     {
         eegneo::MarkerCmd cmd;
         ::memcpy(cmd.msg, event.toStdString().data(), event.length());
-        mIpcWrapper_->sendCmd(cmd);
+        mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, cmd);
     }
 }
 
@@ -118,7 +124,7 @@ void AcquisitionWindow::startDataSampler()
 
 void AcquisitionWindow::stopDataSampler()
 {
-    mIpcWrapper_->sendCmd(eegneo::ShutdownCmd{});
+    mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, eegneo::ShutdownCmd{});
     mBackend_.close();
     mSharedMemory_->detach();
 }
@@ -183,7 +189,7 @@ void AcquisitionWindow::connectSignalAndSlot()
     { 
         bool isFilt = ((!mFiltCmd_.isFiltOn) && mFiltCmd_.isValid());
         mFiltCmd_.isFiltOn = isFilt;  
-        mIpcWrapper_->sendCmd(mFiltCmd_);    
+        mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, mFiltCmd_);    
         ui->label_5->setText(isFilt ? "On" : "Off"); 
     });
 
@@ -214,13 +220,12 @@ void AcquisitionWindow::connectSignalAndSlot()
     QObject::connect(ui->comboBox_2, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.highCutoff = text.toDouble(); });
     QObject::connect(ui->comboBox_3, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.notchCutoff = text.toDouble(); });
 
-    QObject::connect(ui->actionStart_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = true; mIpcWrapper_->sendCmd(mRecCmd_); });
-    QObject::connect(ui->actionStop_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = false; mIpcWrapper_->sendCmd(mRecCmd_); });
+    QObject::connect(ui->actionStart_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = true; mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, mRecCmd_); });
+    QObject::connect(ui->actionStop_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = false; mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, mRecCmd_); });
 
     QObject::connect(ui->actionEDF, &QAction::triggered, [this]()->void{ this->saveToEDFFormatFile(); });
 
     QObject::connect(ui->actionBDF, &QAction::triggered, [this]()->void{ this->saveToBDFFormatFile(); });
-    // QObject::connect(ui->actionp300oddball, SIGNAL(triggered()), this, SLOT(p300Oddball()));
 
     QObject::connect(ui->action_10_10uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(10); });
     QObject::connect(ui->action_25_25uV, &QAction::triggered, [this]()->void{ this->setVoltageAxisScale(25); });
@@ -256,7 +261,7 @@ void AcquisitionWindow::saveToEDFFormatFile()
     cmd.channelNum = this->mChannelNum_;
     cmd.fileType = eegneo::EDFFileType::EDF;
     ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
-    mIpcWrapper_->sendCmd(cmd);
+    mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, cmd);
     mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 
@@ -269,7 +274,7 @@ void AcquisitionWindow::saveToBDFFormatFile()
     cmd.channelNum = this->mChannelNum_;
     cmd.fileType = eegneo::EDFFileType::BDF;
     ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
-    mIpcWrapper_->sendCmd(cmd);
+    mIpcWrapper_->sendCmd(eegneo::SessionId::AccquisitionInnerSession, cmd);
     mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 

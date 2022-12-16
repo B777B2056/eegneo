@@ -6,7 +6,7 @@
 
 #define BUF_BYTES_LEN (this->mChannelNum_ * sizeof(double))
 
-#define InitIpcServer(ipcReader, CMDType)   \
+#define InitIpcServer(CMDType)   \
     do  \
     {   \
         mIpcWrapper_.setCmdHandler<eegneo::## CMDType## Cmd>([this](eegneo::## CMDType## Cmd* cmd)->void   \
@@ -36,17 +36,18 @@ namespace eegneo
             throw "Shared memory create failed!";
         }
 
-        InitIpcServer(mIpcWrapper_, Record);
-        InitIpcServer(mIpcWrapper_, Filt);
-        InitIpcServer(mIpcWrapper_, Shutdown);
-        InitIpcServer(mIpcWrapper_, Marker);
-        InitIpcServer(mIpcWrapper_, FileSave);
+        InitIpcServer(Record);
+        InitIpcServer(Filt);
+        InitIpcServer(Shutdown);
+        InitIpcServer(Marker);
+        InitIpcServer(FileSave);
 
         // 连接主进程
         if (!mIpcWrapper_.start())
         {
 
         }
+        mIpcWrapper_.sendIdentifyInfo(SessionId::AccquisitionInnerSession);
     }
 
     AcquisitionBackend::~AcquisitionBackend()
@@ -101,7 +102,7 @@ namespace eegneo
         writter.setSampleFreqencyHz(cmd->sampleRate);
         writter.saveRecordData();
         writter.saveAnnotation();
-        this->mIpcWrapper_.sendCmd(FileSavedFinishedCmd{});
+        this->mIpcWrapper_.sendCmd(SessionId::AccquisitionInnerSession, FileSavedFinishedCmd{});
     }
 
     void AcquisitionBackend::doSample()

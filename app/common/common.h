@@ -4,16 +4,28 @@
 #include <type_traits>
 
 
-constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";
-constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";
+constexpr const std::uint16_t IPC_SVR_PORT = 8888;  // IPC服务器端口
+constexpr const char* IPC_SVR_ADDR = "127.0.0.1";   // IPC服务器IP地址
+constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";    // 数据临时记录文件路径
+constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";  // 事件临时记录文件路径
+constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
+
 namespace eegneo
 {
 
 #pragma  pack (push,1)
 
+    enum class SessionId : std::uint8_t
+    {
+        Invalid = 0,
+        AccquisitionInnerSession = 1,
+        ERPSession = 2
+    };
+
     enum class CmdId : std::uint8_t
     {
         Invalid = 0,
+        Init,
         Record,
         Filt,
         Shutdown,
@@ -30,10 +42,16 @@ namespace eegneo
 
     struct CmdHeader
     {
-        CmdId id = CmdId::Invalid;
+        SessionId sid = SessionId::Invalid;
+        CmdId cid = CmdId::Invalid;
     };
 
     namespace detail { struct AbstractCmd {}; }
+
+    struct InitCmd : public detail::AbstractCmd
+    {
+
+    };
 
     struct RecordCmd : public detail::AbstractCmd
     {
@@ -81,7 +99,11 @@ namespace eegneo
         template<typename Cmd>
         CmdId CmdType2Id()
         {
-            if constexpr (std::is_same_v<Cmd, RecordCmd>)
+            if constexpr (std::is_same_v<Cmd, InitCmd>)
+            {
+                return CmdId::Init;
+            }
+            else if constexpr (std::is_same_v<Cmd, RecordCmd>)
             {
                 return CmdId::Record;
             }
