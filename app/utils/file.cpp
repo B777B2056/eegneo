@@ -100,8 +100,8 @@ namespace eegneo
             for (std::size_t i = 0; i < this->mChannelNum_; ++i)
             {
                 ::edf_set_samplefrequency(this->mFp_, static_cast<int>(i), static_cast<int>(sampleFreqencyHz));
-                ::edf_set_physical_maximum(this->mFp_, static_cast<int>(i), 2500000.0); //设置物理最大值
-                ::edf_set_physical_minimum(this->mFp_, static_cast<int>(i), -2500000.0);//设置物理最小值
+                ::edf_set_physical_maximum(this->mFp_, static_cast<int>(i), 1000.0); //设置物理最大值
+                ::edf_set_physical_minimum(this->mFp_, static_cast<int>(i), -1000.0);//设置物理最小值
                 ::edf_set_digital_maximum(this->mFp_, static_cast<int>(i), 32767);    //设置最大值
                 ::edf_set_digital_minimum(this->mFp_, static_cast<int>(i), -32768);   //设置最小值
                 ::edf_set_physical_dimension(this->mFp_, static_cast<int>(i), "uV");    // 设置物理单位
