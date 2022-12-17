@@ -1,5 +1,4 @@
 #pragma once
-#include <functional>
 #include <unordered_map>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -9,61 +8,84 @@ namespace eegneo
 {
     namespace utils
     {
-        class IpcWrapper
+        class IpcService;
+
+        class IpcClient
         {
+            friend class IpcService;
         public:
-            IpcWrapper();
-            ~IpcWrapper();
-
-            bool start();
-
-            void setMainProcess() { this->mIsMainProcess_ = true; }
+            IpcClient(SessionId sid);
+            IpcClient(IpcClient&& rhs);
+            IpcClient& operator=(IpcClient&& rhs);
+            ~IpcClient();
 
             template<typename Cmd>
             void setCmdHandler(std::function<void(Cmd*)> handler)
             {
-                mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](detail::AbstractCmd* baseCmd)->void
+                this->mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](QTcpSocket* channel)->void
                 {
-                    handler(static_cast<Cmd*>(baseCmd));
+                    if (Cmd cmd; IpcClient::ReadBytes(channel, (char*)&cmd, sizeof(cmd)))   
+                    {   
+                        handler(&cmd);
+                    }   
                 };
             }
 
-            void sendIdentifyInfo(SessionId sid);
-
             template<typename Cmd>
-            void sendCmd(SessionId sid, const Cmd& cmd)
+            void sendCmd(const Cmd& cmd)
             {
                 CmdHeader hdr; 
-                hdr.sid = sid;
+                hdr.sid = this->mSid_;
                 hdr.cid = detail::CmdType2Id<Cmd>();
                 constexpr std::int64_t len = sizeof(hdr) + sizeof(cmd);
                 char buf[len] = {0};
                 ::memcpy(buf, (char*)&hdr, sizeof(hdr));
                 ::memcpy(buf + sizeof(hdr), (char*)&cmd, sizeof(cmd));
                 std::int64_t bytesTransferred = 0;
-                auto* channel = (mClt_ ? mClt_ : mSessions_[sid]);
                 do
                 {
-                    std::int64_t t = channel->write(buf + bytesTransferred, len - bytesTransferred);
+                    std::int64_t t = mChannel_->write(buf + bytesTransferred, len - bytesTransferred);
                     if (!t) break;
                     bytesTransferred += t;
                 } while (bytesTransferred < len);
-                channel->waitForBytesWritten();
-                channel->flush();
+                // mChannel_->waitForBytesWritten();
+                mChannel_->flush();
             }
 
         private:
-            using CmdHandlerHashMap = std::unordered_map<CmdId, std::function<void(detail::AbstractCmd*)>>;
+            SessionId mSid_;
+            QTcpSocket* mChannel_;
+            detail::CmdCallBackMap mHandlers_;
+
+            IpcClient();
+            IpcClient(QTcpSocket* channel);
+            void sendIdentifyInfo();
+            void handleMsg();
+            static bool ReadBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength);
+        };
+
+        class IpcService
+        {
+        public:
+            IpcService();
+            ~IpcService();
+
+            IpcClient* session(SessionId sid) { return this->mSessions_[sid]; }
+
+            template<typename Cmd>
+            void setCmdHandler(SessionId sid, std::function<void(Cmd*)> handler)
+            {
+                if (!this->mSessions_.contains(sid))
+                {
+                    this->mSessions_[sid] = new IpcClient();
+                }
+                this->mSessions_[sid]->setCmdHandler<Cmd>(handler);
+            }
 
         private:
-            bool mIsMainProcess_;
-            QTcpServer* mSvr_;
-            QTcpSocket* mClt_;
-            CmdHandlerHashMap mHandlers_;
-            std::unordered_map<SessionId, QTcpSocket*> mSessions_;
-
-            void handleMsg(QTcpSocket* channel);
-            bool readBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength);
+            QTcpServer mSvr_;
+            std::vector<IpcClient*> mClients_;
+            std::unordered_map<SessionId, IpcClient*> mSessions_;
         };
     }   // namespace utils
 }   // namespace eegneo

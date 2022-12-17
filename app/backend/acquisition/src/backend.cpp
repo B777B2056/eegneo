@@ -21,7 +21,8 @@
 namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum)
-        : mDataSampler_(new TestDataSampler(channelNum))
+        : mIpcWrapper_(SessionId::AccquisitionInnerSession)
+        , mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum)
         , mSharedMemory_{"Sampler"}
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
@@ -41,13 +42,6 @@ namespace eegneo
         InitIpcServer(Shutdown);
         InitIpcServer(Marker);
         InitIpcServer(FileSave);
-
-        // 连接主进程
-        if (!mIpcWrapper_.start())
-        {
-
-        }
-        mIpcWrapper_.sendIdentifyInfo(SessionId::AccquisitionInnerSession);
     }
 
     AcquisitionBackend::~AcquisitionBackend()
@@ -102,7 +96,7 @@ namespace eegneo
         writter.setSampleFreqencyHz(cmd->sampleRate);
         writter.saveRecordData();
         writter.saveAnnotation();
-        this->mIpcWrapper_.sendCmd(SessionId::AccquisitionInnerSession, FileSavedFinishedCmd{});
+        this->mIpcWrapper_.sendCmd(FileSavedFinishedCmd{});
     }
 
     void AcquisitionBackend::doSample()

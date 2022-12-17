@@ -63,7 +63,7 @@ private:
     eegneo::EEGWavePlotter* mSignalChart_ = nullptr;
     eegneo::FFTWavePlotter* mFFTChart_ = nullptr;
     // 滤波相关
-    eegneo::utils::IpcWrapper* mIpcWrapper_ = nullptr;
+    eegneo::utils::IpcService* mIpcWrapper_ = nullptr;
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关

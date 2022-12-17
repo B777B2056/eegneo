@@ -24,7 +24,7 @@ namespace eegneo
         void run();
 
     private:
-        utils::IpcWrapper mIpcWrapper_;
+        utils::IpcClient mIpcWrapper_;
 
         EEGDataSampler* mDataSampler_;
         std::size_t mChannelNum_;

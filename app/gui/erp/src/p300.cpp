@@ -13,13 +13,11 @@ static QString RESOURCE_ROOT_PATH = "E:/jr/eegneo/app/resource/p300/oddball/";
 
 ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     : QMainWindow(parent)
+    , mIpc_(eegneo::SessionId::ERPSession)
     , mIsInPractice_(true), mIsInExperiment_(false), mIsEnded_(false), mStimulusImageCount_(0)
     , ui(new Ui::p300)
 {
     ui->setupUi(this);
-    // 连接数据采集进程
-    mIpc_.start();
-    mIpc_.sendIdentifyInfo(eegneo::SessionId::ERPSession);
     // 设置全黑背景色
     QPalette palette(this->palette());
     palette.setColor(QPalette::Window, Qt::black);
@@ -86,7 +84,7 @@ void ErpP300OddballWindow::sendMarker(const char* msg)
 {
     eegneo::MarkerCmd cmd;
     ::memcpy(cmd.msg, msg, std::strlen(msg));
-    mIpc_.sendCmd(eegneo::SessionId::ERPSession, cmd);
+    mIpc_.sendCmd(cmd);
 }
 
 static void DelayMs(int ms)

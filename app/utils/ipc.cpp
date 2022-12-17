@@ -1,121 +1,90 @@
 #include "ipc.h"
 #include <iostream>
 
-#define ReadAndHandler(CMDType) \
-    do  \
-    {   \
-        if (CMDType##Cmd cmd; this->readBytes(channel, (char*)&cmd, sizeof(cmd)))   \
-        {   \
-            this->mHandlers_[cmdHdr.cid](&cmd);  \
-        }   \
-    }   \
-    while (0)
-
 namespace eegneo
 {
     namespace utils
     {
-        IpcWrapper::IpcWrapper() 
-            : mIsMainProcess_(false), mSvr_(nullptr), mClt_(nullptr)
+        IpcClient::IpcClient()
+            : mSid_(SessionId::Invalid), mChannel_(nullptr)
+        {
+
+        }
+
+        IpcClient::IpcClient(IpcClient&& rhs)
         {
             
+            *this = std::move(rhs);
         }
 
-        IpcWrapper::~IpcWrapper()
+        IpcClient& IpcClient::operator=(IpcClient&& rhs)
         {
-            if (mSvr_)
+            if (this != &rhs)
             {
-                mSvr_->close();
-                delete mSvr_;
+                mSid_ = rhs.mSid_;
+                mChannel_ = rhs.mChannel_;
+                mHandlers_ = std::move(rhs.mHandlers_);
+                rhs.mSid_ = SessionId::Invalid;
+                rhs.mChannel_ = nullptr;
             }
-            if (mClt_)
-            {
-                mClt_->disconnectFromHost();
-                delete mClt_;
-            }
+            return *this;
         }
 
-        void IpcWrapper::sendIdentifyInfo(SessionId sid)
+        IpcClient::IpcClient(SessionId sid)
+            : mSid_(sid), mChannel_(new QTcpSocket())
+        {
+            QObject::connect(mChannel_, &QTcpSocket::connected, [this]()->void
+            {
+                QObject::connect(mChannel_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(); });
+                this->sendIdentifyInfo();
+            });
+            mChannel_->connectToHost(IPC_SVR_ADDR, IPC_SVR_PORT);
+        }
+
+        IpcClient::IpcClient(QTcpSocket* channel)
+            : mSid_(SessionId::Invalid), mChannel_(channel)
+        {
+            QObject::connect(mChannel_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(); });
+        }
+
+        IpcClient::~IpcClient()
+        {
+            if (mChannel_)  mChannel_->disconnectFromHost();
+        }
+
+        void IpcClient::sendIdentifyInfo()
         {
             CmdHeader cmdHdr;
-            cmdHdr.sid = sid;
+            cmdHdr.sid = this->mSid_;
             cmdHdr.cid = CmdId::Init;
             char* buf = reinterpret_cast<char*>(&cmdHdr);
             std::int64_t bytesTransferred = 0;
             do
             {
-                std::int64_t t = mClt_->write(buf + bytesTransferred, sizeof(cmdHdr) - bytesTransferred);
+                std::int64_t t = mChannel_->write(buf + bytesTransferred, sizeof(cmdHdr) - bytesTransferred);
                 if (!t) break;
                 bytesTransferred += t;
             } while (bytesTransferred < sizeof(cmdHdr));
-            mClt_->waitForBytesWritten();
-            mClt_->flush();
+            // mChannel_->waitForBytesWritten();
+            mChannel_->flush();
         }
 
-        bool IpcWrapper::start()
+        void IpcClient::handleMsg()
         {
-            if (this->mIsMainProcess_)
-            {
-                mSvr_ = new QTcpServer();
-                QObject::connect(mSvr_, &QTcpServer::newConnection, [this]()->void
-                { 
-                    auto* channel = mSvr_->nextPendingConnection();
-                    QObject::connect(channel, &QTcpSocket::readyRead, [this, channel]()->void{ this->handleMsg(channel); });
-                });
-                return mSvr_->listen(QHostAddress::Any, IPC_SVR_PORT);
-            }
-            else
-            {
-                mClt_ = new QTcpSocket();
-                QObject::connect(mClt_, &QTcpSocket::connected, [this]()->void
-                {
-                    QObject::connect(mClt_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(mClt_); });
-                });
-                mClt_->connectToHost(IPC_SVR_ADDR, IPC_SVR_PORT);
-                return true;
-            }
-        }
-
-        void IpcWrapper::handleMsg(QTcpSocket* channel)
-        {
-            if (!channel->bytesAvailable())
+            if (!mChannel_->bytesAvailable())
             {
                 return;
             }
             CmdHeader cmdHdr;
-            if (!this->readBytes(channel, (char*)&cmdHdr, sizeof(cmdHdr)) || (CmdId::Invalid == cmdHdr.cid))
+            if (!IpcClient::ReadBytes(mChannel_, (char*)&cmdHdr, sizeof(cmdHdr)) || (CmdId::Invalid == cmdHdr.cid))
             {
                 return;
             }
-            switch (cmdHdr.cid)
-            {
-            case CmdId::Init:
-                this->mSessions_[cmdHdr.sid] = channel;
-                break;
-            case CmdId::Record:
-                ReadAndHandler(Record);
-                break;
-            case CmdId::Filt:
-                ReadAndHandler(Filt);
-                break;
-            case CmdId::Shutdown:
-                ReadAndHandler(Shutdown);
-                break;
-            case CmdId::Marker:
-                ReadAndHandler(Marker);
-                break;
-            case CmdId::FileSave:
-                ReadAndHandler(FileSave);
-                break;
-            case CmdId::FileSavedFinished:
-                ReadAndHandler(FileSavedFinished);
-                break;
-            default:
-                break;
-            }
+            this->mSid_ = cmdHdr.sid;
+            this->mHandlers_[cmdHdr.cid](mChannel_);
         }
 
-        bool IpcWrapper::readBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength)
+        bool IpcClient::ReadBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength)
         {   
             std::uint16_t bytesReceived = 0;    
             do  
@@ -125,6 +94,37 @@ namespace eegneo
                 bytesReceived += t; 
             } while (bytesReceived < bytesLength);   
             return true;
+        }
+
+        IpcService::IpcService()
+        {
+            QObject::connect(&mSvr_, &QTcpServer::newConnection, [this]()->void
+            { 
+                auto* clt = new IpcClient(mSvr_.nextPendingConnection());
+                clt->mHandlers_[CmdId::Init] = [this, clt](QTcpSocket* channel)->void
+                {
+                    auto* cltProxy = this->mSessions_[clt->mSid_];
+                    
+                    for (auto&& [cmdid, cb] : cltProxy->mHandlers_)
+                    {
+                        clt->mHandlers_[cmdid] = cb;
+                    }
+
+                    this->mSessions_[clt->mSid_] = clt;
+                    delete cltProxy;
+                };
+                mClients_.push_back(clt);
+            });
+            mSvr_.listen(QHostAddress::Any, IPC_SVR_PORT);
+        }
+
+        IpcService::~IpcService()
+        {
+            mSvr_.close();
+            for (auto* p : mClients_)
+            {
+                delete p;
+            }
         }
     }   // namespace utils
 }   // namespace eegneo
