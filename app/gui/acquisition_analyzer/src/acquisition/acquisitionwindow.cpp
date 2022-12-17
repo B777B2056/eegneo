@@ -27,19 +27,22 @@
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
+    , mGraphicsScene_(new QGraphicsScene(this))
+    , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap("E:/jr/eegneo/app/resource/Images/eeg_10_20.png")))
     , mPlotTimer_(new QTimer(this))
     , mIpcWrapper_(new eegneo::utils::IpcService())
     , mFileSaveFinishedFlag_(FILE_SAVE_NOT_START)
     , ui(new Ui::AcquisitionWindow)
 {
     ui->setupUi(this);
-    ui->label_5->setText("Off");    // 滤波指示信号初始化：未滤波
-
+    this->initUI();
+    
     mIpcWrapper_->setCmdHandler<eegneo::FileSavedFinishedCmd>(eegneo::SessionId::AccquisitionInnerSession, [this](eegneo::FileSavedFinishedCmd* cmd)->void
     {
         this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
         QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
     });
+
     mIpcWrapper_->setCmdHandler<eegneo::MarkerCmd>(eegneo::SessionId::ERPSession, [this](eegneo::MarkerCmd* cmd)->void
     {
         this->createMark(cmd->msg);
@@ -55,7 +58,30 @@ AcquisitionWindow::~AcquisitionWindow()
     delete mSharedMemory_;
     delete[] mSignalBuf_;
     delete mSignalChart_;
+    delete mGraphicsScene_;
+    delete mGraphicsPixmapItem_;
     delete ui;
+}
+
+void AcquisitionWindow::showEvent(QShowEvent *event)
+{
+    QRectF bounds = mGraphicsScene_->itemsBoundingRect();
+    bounds.setWidth(bounds.width()*0.9);         
+    bounds.setHeight(bounds.height()*0.9);
+    ui->graphicsView_3->fitInView(bounds, Qt::KeepAspectRatio);
+    ui->graphicsView_3->centerOn(mGraphicsPixmapItem_);
+    QMainWindow::showEvent(event);
+}
+
+void AcquisitionWindow::initUI()
+{
+    ui->label_5->setText("Off");    // 滤波指示信号初始化：未滤波
+
+    mGraphicsScene_->setSceneRect(500, 500, 190, 190);  
+    mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
+    mGraphicsScene_->addItem(mGraphicsPixmapItem_);
+    ui->graphicsView_3->setScene(mGraphicsScene_);
+    ui->graphicsView_3->show();
 }
 
 void AcquisitionWindow::start()

@@ -9,7 +9,7 @@
 #include <vector>
 #include <string>
 #include <utility>
-#include "utils/charthelp.h"
+#include "analysis/charthelp.h"
 #include "settings/setchannelname.h"
 #include "settings/seteventchannel.h"
 // #include "acquisition/filter.h"

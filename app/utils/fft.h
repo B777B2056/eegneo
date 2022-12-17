@@ -21,7 +21,7 @@ namespace eegneo
 
         private:
             audiofft::AudioFFT fft;
-            constexpr static std::uint64_t fftsize_ = 32;
+            constexpr static std::uint64_t fftsize_ = 64;
             std::vector<float> mSignal_;
             std::vector<float> mRe_;
             std::vector<float> mIm_;

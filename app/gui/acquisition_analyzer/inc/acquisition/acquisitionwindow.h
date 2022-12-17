@@ -26,7 +26,12 @@ public:
     // 显示信息输入窗口并启动数据采集进程
     void start();
 
+protected:
+    void showEvent(QShowEvent *event) override;
+
 private:
+    // 初始化ui
+    void initUI();
     // 启动数据采集
     void startDataSampler();
     // 停止数据采集
@@ -57,6 +62,8 @@ private:
     std::size_t mChannelNum_;
     QProcess mBackend_;
     // 绘图相关
+    QGraphicsScene* mGraphicsScene_;
+    QGraphicsPixmapItem* mGraphicsPixmapItem_;
     QTimer* mPlotTimer_ = nullptr;
     double* mSignalBuf_ = nullptr;
     QSharedMemory* mSharedMemory_ = nullptr;

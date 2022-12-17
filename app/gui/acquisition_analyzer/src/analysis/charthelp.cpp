@@ -1,4 +1,4 @@
-#include "utils/charthelp.h"
+#include "analysis/charthelp.h"
 #include "ui_charthelp.h"
 
 ChartHelp::ChartHelp(QWidget *parent) :

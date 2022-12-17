@@ -1,10 +1,13 @@
 #pragma once
 #include <QDialog>
-#include "utils/enum.h"
 
 namespace Ui {
 class PSDInfo;
 }
+
+// 功率谱类型枚举
+enum PSDType
+{ EMPTY, Linear, Log };
 
 class PSDInfo : public QDialog
 {
