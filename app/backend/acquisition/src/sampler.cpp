@@ -9,8 +9,8 @@ namespace eegneo
     EEGDataSampler::EEGDataSampler(std::size_t channelNum)
         : mBuf_(new double[channelNum]), mChannelNum_(channelNum)
         , mIsRecord_(false), mCurDataN_(0)
-        , mDataFile_{DATA_FILE_PATH, std::ios::out | std::ios::binary}
-        , mEventFile_{EVENT_FILE_PATH, std::ios::out}
+        , mDataFile_{DATA_CACHE_FILE_PATH, std::ios::out | std::ios::binary}
+        , mEventFile_{EVENT_CACHE_FILE_PATH, std::ios::out}
     {
         if (!mDataFile_.is_open())
         {
@@ -54,7 +54,7 @@ namespace eegneo
 
     TestDataSampler::TestDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
-        , mEDFReader_(DATA_FILE_PATH)
+        , mEDFReader_(TEST_DATA_FILE_PATH)
     {
         std::vector<double> maxV, minV;
         for (std::size_t i = 0; i < mChannelNum_; ++i)

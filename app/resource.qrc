@@ -1,0 +1,17 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>resource/Images/eeg_10_20.png</file>
+        <file>resource/Images/MainBackground.png</file>
+    </qresource>
+    <qresource prefix="/erp/p300">
+        <file>resource/p300/oddball/2.bmp</file>
+        <file>resource/p300/oddball/8.bmp</file>
+        <file>resource/p300/oddball/cross.png</file>
+        <file>resource/p300/oddball/end.jpg</file>
+        <file>resource/p300/oddball/gotask.jpg</file>
+        <file>resource/p300/oddball/ifgo.jpg</file>
+    </qresource>
+    <qresource prefix="/config">
+        <file>resource/config.json</file>
+    </qresource>
+</RCC>

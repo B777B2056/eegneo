@@ -13,7 +13,7 @@ namespace eegneo
         {
             friend class IpcService;
         public:
-            IpcClient(SessionId sid);
+            IpcClient(SessionId sid, const char* svrAddr, std::uint16_t svrPort);
             IpcClient(IpcClient&& rhs);
             IpcClient& operator=(IpcClient&& rhs);
             ~IpcClient();
@@ -21,7 +21,7 @@ namespace eegneo
             template<typename Cmd>
             void setCmdHandler(std::function<void(Cmd*)> handler)
             {
-                this->mHandlers_[detail::CmdType2Id<Cmd>()] = [handler](QTcpSocket* channel)->void
+                this->mHandlers_[detail::CmdTypeMapToCmdId<Cmd>()] = [handler](QTcpSocket* channel)->void
                 {
                     if (Cmd cmd; IpcClient::ReadBytes(channel, (char*)&cmd, sizeof(cmd)))   
                     {   
@@ -35,7 +35,7 @@ namespace eegneo
             {
                 CmdHeader hdr; 
                 hdr.sid = this->mSid_;
-                hdr.cid = detail::CmdType2Id<Cmd>();
+                hdr.cid = detail::CmdTypeMapToCmdId<Cmd>();
                 constexpr std::int64_t len = sizeof(hdr) + sizeof(cmd);
                 char buf[len] = {0};
                 ::memcpy(buf, (char*)&hdr, sizeof(hdr));
@@ -66,7 +66,7 @@ namespace eegneo
         class IpcService
         {
         public:
-            IpcService();
+            IpcService(std::uint16_t svrPort);
             ~IpcService();
 
             IpcClient* session(SessionId sid) { return this->mSessions_[sid]; }

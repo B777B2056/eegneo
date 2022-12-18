@@ -29,7 +29,7 @@ private:
     };
 
 private:
-    eegneo::utils::IpcClient mIpc_;
+    eegneo::utils::IpcClient* mIpc_;
     double mStimulusImageRatio_;
     int mImagesInPracticeTotalCount_, mImagesInExperimentTotalCount_;
     int mCrossDurationMs_, mImageDurationMs_, mBlankDurationMsLowerBound_, mBlankDurationMsUpperBound_;

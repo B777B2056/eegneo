@@ -30,7 +30,7 @@ namespace eegneo
             return *this;
         }
 
-        IpcClient::IpcClient(SessionId sid)
+        IpcClient::IpcClient(SessionId sid, const char* svrAddr, std::uint16_t svrPort)
             : mSid_(sid), mChannel_(new QTcpSocket())
         {
             QObject::connect(mChannel_, &QTcpSocket::connected, [this]()->void
@@ -38,7 +38,9 @@ namespace eegneo
                 QObject::connect(mChannel_, &QTcpSocket::readyRead, [this]()->void{ this->handleMsg(); });
                 this->sendIdentifyInfo();
             });
-            mChannel_->connectToHost(IPC_SVR_ADDR, IPC_SVR_PORT);
+
+
+            mChannel_->connectToHost(svrAddr, svrPort);
         }
 
         IpcClient::IpcClient(QTcpSocket* channel)
@@ -96,7 +98,7 @@ namespace eegneo
             return true;
         }
 
-        IpcService::IpcService()
+        IpcService::IpcService(std::uint16_t svrPort)
         {
             QObject::connect(&mSvr_, &QTcpServer::newConnection, [this]()->void
             { 
@@ -115,7 +117,7 @@ namespace eegneo
                 };
                 mClients_.push_back(clt);
             });
-            mSvr_.listen(QHostAddress::Any, IPC_SVR_PORT);
+            mSvr_.listen(QHostAddress::Any, svrPort);
         }
 
         IpcService::~IpcService()

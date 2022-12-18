@@ -7,9 +7,9 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
 
 include_directories("inc")
 
-file(GLOB HEADERS "inc/*.h" "../../utils/ipc.h")
-file(GLOB SOURCES "src/*.cpp" "../../utils/ipc.cpp")
+file(GLOB HEADERS "inc/*.h")
+file(GLOB SOURCES "src/*.cpp" "../../utils/ipc.cpp" "../../utils/config.cpp")
 file(GLOB UI "ui/*.ui")
 
-add_executable(eegneo_erp ${HEADERS} ${UI} ${SOURCES})
+qt_add_executable(eegneo_erp "../../resource.qrc" ${HEADERS} ${UI} ${SOURCES})
 target_link_libraries(eegneo_erp PRIVATE Qt6::Core Qt6::Widgets Qt6::Network)

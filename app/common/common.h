@@ -5,11 +5,9 @@
 #include <type_traits>
 #include <unordered_map>
 
-constexpr const std::uint16_t IPC_SVR_PORT = 8888;  // IPC服务器端口
-constexpr const char* IPC_SVR_ADDR = "127.0.0.1";   // IPC服务器IP地址
-constexpr const char* DATA_FILE_PATH = "E:/jr/eegneo/temp_data.txt";    // 数据临时记录文件路径
-constexpr const char* EVENT_FILE_PATH = "E:/jr/eegneo/temp_event.txt";  // 事件临时记录文件路径
-constexpr const char* BACKEND_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
+constexpr const char* DATA_CACHE_FILE_PATH = "temp_data.txt";    // 数据临时记录文件路径
+constexpr const char* EVENT_CACHE_FILE_PATH = "temp_event.txt";  // 事件临时记录文件路径
+constexpr const char* BACKEND_EXE_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
 
 class QTcpSocket;
 
@@ -94,7 +92,7 @@ namespace eegneo
         using CmdCallBackMap = std::unordered_map<CmdId, std::function<void(QTcpSocket*)>>;
 
         template<typename Cmd>
-        CmdId CmdType2Id()
+        constexpr CmdId CmdTypeMapToCmdId()
         {
             if constexpr (std::is_same_v<Cmd, RecordCmd>)
             {

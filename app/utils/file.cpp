@@ -79,13 +79,10 @@ namespace eegneo
 
         }
 
-        static std::fstream debug_file{"E:/jr/eegneo/debug.txt", std::ios::out};
-
         EDFWritter::EDFWritter(const char* filePath, std::size_t channelNum, EDFFileType type)
             : EEGFileWriter(filePath, channelNum)
         {
             this->mFp_ = ::edfopen_file_writeonly(filePath, ((EDFFileType::EDF == type) ? EDFLIB_FILETYPE_EDFPLUS : EDFLIB_FILETYPE_BDFPLUS), static_cast<int>(channelNum));
-            debug_file << "fp = " << mFp_ << std::endl;
         }
 
         EDFWritter::~EDFWritter()
@@ -137,7 +134,7 @@ namespace eegneo
                 return;
             }
             // 打开缓存文件
-            std::fstream dataCacheFile{DATA_FILE_PATH, std::ios::in | std::ios::binary};
+            std::fstream dataCacheFile{DATA_CACHE_FILE_PATH, std::ios::in | std::ios::binary};
             if (!dataCacheFile.is_open())
             {
                 return;
@@ -160,7 +157,7 @@ namespace eegneo
                 return;
             }
             // 打开缓存文件
-            std::fstream eventCacheFile{EVENT_FILE_PATH, std::ios::in};
+            std::fstream eventCacheFile{EVENT_CACHE_FILE_PATH, std::ios::in};
             if (!eventCacheFile.is_open())
             {
                 return;

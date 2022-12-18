@@ -13,6 +13,5 @@ int main(int argc, char* argv[])
     QTimer timer;
     QObject::connect(&timer, &QTimer::timeout, [&backend]{ backend.run(); });
     timer.start();
-    
     return app.exec();
 }

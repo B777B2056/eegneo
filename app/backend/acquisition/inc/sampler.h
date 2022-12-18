@@ -48,7 +48,7 @@ namespace eegneo
     private:
         QTimer timer;
         int idx = 0;
-        const char* DATA_FILE_PATH = "E:/jr/eegneo/test/data/AL0020_wuxin_2020-12-17_18-31-21_Segment_0.edf";
+        const char* TEST_DATA_FILE_PATH = "E:/jr/eegneo/test/data/S001R01.edf";
         utils::EDFReader mEDFReader_;
 
         void sampleOnce() override;

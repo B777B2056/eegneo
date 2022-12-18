@@ -4,16 +4,17 @@
 #include <cstring>
 #include <QString>
 #include "common/common.h"
+#include "utils/config.h"
 
 #if _MSC_VER >= 1600
 #pragma execution_character_set("utf-8")
 #endif
 
-static QString RESOURCE_ROOT_PATH = "E:/jr/eegneo/app/resource/p300/oddball/";
+static QString RESOURCE_ROOT_PATH = ":/erp/p300/resource/p300/oddball/";
 
 ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     : QMainWindow(parent)
-    , mIpc_(eegneo::SessionId::ERPSession)
+    , mIpc_(nullptr)
     , mIsInPractice_(true), mIsInExperiment_(false), mIsEnded_(false), mStimulusImageCount_(0)
     , ui(new Ui::p300)
 {
@@ -27,26 +28,33 @@ ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "gotask.jpg"));
     ui->label->show();
     this->setCentralWidget(ui->label);
-    /* 设置实验参数 */
-    this->init();
-    // 全屏显示
-//    this->showFullScreen();
+    // 初始化
+    this->init(); 
 }
 
 ErpP300OddballWindow::~ErpP300OddballWindow()
 {
+    delete mIpc_;
     delete ui;
 }
 
 void ErpP300OddballWindow::init()
 {
-    this->mImagesInPracticeTotalCount_ = 40;
-    this->mImagesInExperimentTotalCount_ = 200;
-    this->mStimulusImageRatio_ = 0.2;
-    this->mCrossDurationMs_ = 800;
-    this->mImageDurationMs_ = 50;
-    this->mBlankDurationMsLowerBound_ = 1000;
-    this->mBlankDurationMsUpperBound_ = 1200;
+    auto& config = eegneo::utils::ConfigLoader::instance();
+    // 设置实验参数
+    this->mImagesInPracticeTotalCount_ = config.get<int>("ERP", "ImagesInPracticeTotalCount");
+    this->mImagesInExperimentTotalCount_ = config.get<int>("ERP", "ImagesInExperimentTotalCount");
+    this->mStimulusImageRatio_ = config.get<double>("ERP", "StimulusImageRatio");
+    this->mCrossDurationMs_ = config.get<int>("ERP", "CrossDurationMs");
+    this->mImageDurationMs_ = config.get<int>("ERP", "ImageDurationMs");
+    this->mBlankDurationMsLowerBound_ = config.get<int>("ERP", "BlankDurationMsLowerBound");
+    this->mBlankDurationMsUpperBound_ = config.get<int>("ERP", "BlankDurationMsUpperBound");
+    // 采集软件所在电脑的Ip地址和端口号
+    auto ip = config.get<std::string>("ERP", "AcquisitionIpAddr");
+    auto port = config.get<std::uint16_t>("IpcServerIpPort");
+    this->mIpc_ = new eegneo::utils::IpcClient(eegneo::SessionId::ERPSession, ip.c_str(), port);
+    // 是否全屏显示
+    if (config.get<bool>("ERP", "IsFullScreen"))   this->showFullScreen();
 }
 
 void ErpP300OddballWindow::keyPressEvent(QKeyEvent *event)
@@ -84,7 +92,7 @@ void ErpP300OddballWindow::sendMarker(const char* msg)
 {
     eegneo::MarkerCmd cmd;
     ::memcpy(cmd.msg, msg, std::strlen(msg));
-    mIpc_.sendCmd(cmd);
+    mIpc_->sendCmd(cmd);
 }
 
 static void DelayMs(int ms)

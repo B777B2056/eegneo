@@ -1,5 +1,6 @@
 #include "backend.h"
 #include "sampler.h"
+#include "utils/config.h"
 #include "utils/filter.h"
 #include "utils/fft.h"
 #include "utils/file.h"
@@ -9,7 +10,7 @@
 #define InitIpcServer(CMDType)   \
     do  \
     {   \
-        mIpcWrapper_.setCmdHandler<eegneo::## CMDType## Cmd>([this](eegneo::## CMDType## Cmd* cmd)->void   \
+        mIpcWrapper_->setCmdHandler<eegneo::## CMDType## Cmd>([this](eegneo::## CMDType## Cmd* cmd)->void   \
         {   \
             this->handle##CMDType##Cmd(cmd);  \
         });  \
@@ -21,12 +22,35 @@
 namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum)
-        : mIpcWrapper_(SessionId::AccquisitionInnerSession)
+        : mIpcWrapper_(nullptr)
         , mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum)
         , mSharedMemory_{"Sampler"}
         , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
         , mFFT_(new utils::FFTCalculator[channelNum])
+    {
+        this->initSharedMemory();
+        this->initIpc();
+    }
+
+    AcquisitionBackend::~AcquisitionBackend()
+    {
+        delete mIpcWrapper_;
+        delete[] mFiltBuf_;
+        delete[] mFilter_;
+        delete[] mFFT_;
+        delete mDataSampler_;
+    }
+
+    void AcquisitionBackend::initIpc()
+    {
+        auto& config = eegneo::utils::ConfigLoader::instance();
+        auto port = config.get<std::uint16_t>("IpcServerIpPort");
+        mIpcWrapper_ = new eegneo::utils::IpcClient(SessionId::AccquisitionInnerSession, "127.0.0.1", port);
+        InitIpcServer(Record); InitIpcServer(Filt); InitIpcServer(Shutdown); InitIpcServer(Marker); InitIpcServer(FileSave);
+    }
+
+    void AcquisitionBackend::initSharedMemory()
     {
         if (mSharedMemory_.attach())
         {
@@ -36,20 +60,6 @@ namespace eegneo
         {
             throw "Shared memory create failed!";
         }
-
-        InitIpcServer(Record);
-        InitIpcServer(Filt);
-        InitIpcServer(Shutdown);
-        InitIpcServer(Marker);
-        InitIpcServer(FileSave);
-    }
-
-    AcquisitionBackend::~AcquisitionBackend()
-    {
-        delete[] mFiltBuf_;
-        delete[] mFilter_;
-        delete[] mFFT_;
-        delete mDataSampler_;
     }
 
     void AcquisitionBackend::run()
@@ -92,11 +102,20 @@ namespace eegneo
 
     void AcquisitionBackend::handleFileSaveCmd(FileSaveCmd* cmd)
     {
+        auto& config = eegneo::utils::ConfigLoader::instance();
+        auto names = config.get<std::vector<std::string>>("Acquisition", "Electrodes");
+
         eegneo::utils::EDFWritter writter{cmd->filePath, cmd->channelNum, cmd->fileType};
         writter.setSampleFreqencyHz(cmd->sampleRate);
+
+        for (std::size_t i = 0; i < cmd->channelNum; ++i)
+        {
+            writter.setChannelName(i, names[i].c_str());
+        }
+
         writter.saveRecordData();
         writter.saveAnnotation();
-        this->mIpcWrapper_.sendCmd(FileSavedFinishedCmd{});
+        this->mIpcWrapper_->sendCmd(FileSavedFinishedCmd{});
     }
 
     void AcquisitionBackend::doSample()

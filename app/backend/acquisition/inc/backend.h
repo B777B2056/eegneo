@@ -4,8 +4,6 @@
 #include "common/common.h"
 #include "utils/ipc.h"
 
-class QTimer;
-
 namespace eegneo
 {
     class EEGDataSampler;
@@ -24,7 +22,7 @@ namespace eegneo
         void run();
 
     private:
-        utils::IpcClient mIpcWrapper_;
+        utils::IpcClient* mIpcWrapper_;
 
         EEGDataSampler* mDataSampler_;
         std::size_t mChannelNum_;
@@ -37,6 +35,9 @@ namespace eegneo
         double* mFiltBuf_;
 
         utils::FFTCalculator* mFFT_;
+
+        void initIpc();
+        void initSharedMemory();
 
         void doSample();
         void doFilt();
