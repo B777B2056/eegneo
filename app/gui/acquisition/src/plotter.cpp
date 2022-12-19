@@ -52,22 +52,30 @@ namespace eegneo
         for (int c = 0; c < static_cast<int>(sec) + 1; ++c)
         {
             mAxisX_.remove(QString::number(c));
+        }
+        for (int c = 0; c < static_cast<int>(sec) + 1; ++c)
+        {
             mAxisX_.append(QString::number(c), ((mAxisX_.max() - mAxisX_.min()) / static_cast<int>(sec)) * c);
         }
+
         mAxisX_.setLabelsPosition(QCategoryAxis::AxisLabelsPositionOnValue);
     }
 
     void EEGWavePlotter::setAxisYScale(int maxVoltage)
     {
-        mAxisY_.setMin(0); mAxisY_.setMax(mData_.size() * maxVoltage);
+        mAxisY_.setMin(-maxVoltage); mAxisY_.setMax(-maxVoltage + mData_.size() * maxVoltage);
 
         auto& config = eegneo::utils::ConfigLoader::instance();
         auto names = config.get<std::vector<std::string>>("Acquisition", "Electrodes");
         for (int c = 0; c < mData_.size(); ++c)
         {
-            mAxisY_.remove(QString::number(c));
-            mAxisY_.append(QString::fromStdString(names[c]), ((mAxisY_.max() - mAxisY_.min()) / mData_.size()) * (c + 0.5));
+            mAxisY_.remove(QString::fromStdString(names[c]));
         }
+        for (int c = 0; c < mData_.size(); ++c)
+        {
+            mAxisY_.append(QString::fromStdString(names[c]), -maxVoltage + ((mAxisY_.max() - mAxisY_.min()) / mData_.size()) * (c + 0.5));
+        }
+        
         mAxisY_.setLabelsPosition(QCategoryAxis::AxisLabelsPositionOnValue);
 
     }
@@ -209,5 +217,36 @@ namespace eegneo
             points.back().setY(mAxisY_.min() + (std::size_t)fftval % (std::size_t)(mAxisY_.max() - mAxisY_.min()));
             line->replace(points);
         }
+    }
+
+    TopographyPlotter::TopographyPlotter(QGraphicsView* view)
+        : mView_(view)
+        , mGraphicsScene_(new QGraphicsScene())
+        , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap(":/images/resource/Images/eeg_10_20.png")))
+    {
+        mGraphicsScene_->setSceneRect(500, 500, 190, 190);  
+        mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
+        mGraphicsScene_->addItem(mGraphicsPixmapItem_);
+        mView_->setScene(mGraphicsScene_);
+    }
+
+    TopographyPlotter::~TopographyPlotter()
+    {
+        delete mGraphicsScene_;
+        delete mGraphicsPixmapItem_;
+    }
+
+    void TopographyPlotter::showEvent()
+    {
+        QRectF bounds = mGraphicsScene_->itemsBoundingRect();
+        bounds.setWidth(bounds.width()*0.9);         
+        bounds.setHeight(bounds.height()*0.9);
+        mView_->fitInView(bounds, Qt::KeepAspectRatio);
+        mView_->centerOn(mGraphicsPixmapItem_);
+    }
+
+    void TopographyPlotter::update()
+    {
+        // TODO
     }
 }   // namespace eegneo

@@ -50,13 +50,11 @@ private:
     // 绘图初始化
     void initSignalChart();
     void initFFTChart();
-    // 设置信号与槽的连接关系
-    void connectSignalAndSlot();
-    // 设置通道名称
-    void setChannelName();
     // 数据文件保存
     void saveToEDFFormatFile();
     void saveToBDFFormatFile();
+    // 设置信号与槽的连接关系
+    void connectSignalAndSlot();
 
 private:
     QString mFileName_;
@@ -64,13 +62,12 @@ private:
     std::size_t mChannelNum_;
     QProcess mBackend_;
     // 绘图相关
-    QGraphicsScene* mGraphicsScene_;
-    QGraphicsPixmapItem* mGraphicsPixmapItem_;
     QTimer* mPlotTimer_ = nullptr;
     double* mSignalBuf_ = nullptr;
     QSharedMemory* mSharedMemory_ = nullptr;
-    eegneo::EEGWavePlotter* mSignalChart_ = nullptr;
-    eegneo::FFTWavePlotter* mFFTChart_ = nullptr;
+    eegneo::EEGWavePlotter* mSignalPlotter_ = nullptr;
+    eegneo::FFTWavePlotter* mFFTPlotter_ = nullptr;
+    eegneo::TopographyPlotter* mTopoPlotter_ = nullptr;
     // 滤波相关
     eegneo::utils::IpcService* mIpcWrapper_ = nullptr;
     eegneo::RecordCmd mRecCmd_;

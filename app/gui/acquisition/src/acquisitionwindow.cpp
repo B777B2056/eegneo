@@ -5,7 +5,6 @@
 #include <QDateTime>
 #include <QSharedMemory>
 #include <QStringList>
-#include <iostream>
 #include "setinfo.h"
 #include "utils/config.h"
 
@@ -20,8 +19,6 @@
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
-    , mGraphicsScene_(new QGraphicsScene(this))
-    , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap(":/images/resource/Images/eeg_10_20.png")))
     , mPlotTimer_(new QTimer(this))
     , mIpcWrapper_(nullptr)
     , mFileSaveFinishedFlag_(FILE_SAVE_NOT_START)
@@ -39,29 +36,22 @@ AcquisitionWindow::~AcquisitionWindow()
     delete mPlotTimer_;
     delete mSharedMemory_;
     delete[] mSignalBuf_;
-    delete mSignalChart_;
-    delete mGraphicsScene_;
-    delete mGraphicsPixmapItem_;
+    delete mSignalPlotter_;
+    delete mFFTPlotter_;
+    delete mTopoPlotter_;
     delete ui;
 }
 
 void AcquisitionWindow::showEvent(QShowEvent *event)
 {
-    QRectF bounds = mGraphicsScene_->itemsBoundingRect();
-    bounds.setWidth(bounds.width()*0.9);         
-    bounds.setHeight(bounds.height()*0.9);
-    ui->graphicsView_3->fitInView(bounds, Qt::KeepAspectRatio);
-    ui->graphicsView_3->centerOn(mGraphicsPixmapItem_);
+    this->mTopoPlotter_->showEvent();
     QMainWindow::showEvent(event);
 }
 
 void AcquisitionWindow::initUI()
 {
     ui->label_5->setText("Off");    // 滤波指示信号初始化：未滤波
-    mGraphicsScene_->setSceneRect(500, 500, 190, 190);  
-    mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
-    mGraphicsScene_->addItem(mGraphicsPixmapItem_);
-    ui->graphicsView_3->setScene(mGraphicsScene_);
+    mTopoPlotter_ = new eegneo::TopographyPlotter(ui->graphicsView_3);
     ui->graphicsView_3->show();
 }
 
@@ -113,7 +103,7 @@ void AcquisitionWindow::show()
 void AcquisitionWindow::createMark(const QString& event)
 {
     if(event.isNull() || event.isEmpty()) return;
-    mSignalChart_->addOneMarkerLine(event);
+    mSignalPlotter_->addOneMarkerLine(event);
     // 将marker写入文件
     if (mRecCmd_.isRecordOn)
     {
@@ -144,25 +134,25 @@ void AcquisitionWindow::stopDataSampler()
     mSharedMemory_->detach();
 }
 
-void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mSignalChart_->setAxisYScale(curMaxVoltage ); }
-void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mSignalChart_->setAxisXScale(static_cast<eegneo::Second>(t)); }
+void AcquisitionWindow::setVoltageAxisScale(int curMaxVoltage) { mSignalPlotter_->setAxisYScale(curMaxVoltage ); }
+void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mSignalPlotter_->setAxisXScale(static_cast<eegneo::Second>(t)); }
 
 void AcquisitionWindow::initSignalChart()
 {
     this->mSignalBuf_ = new double[this->mChannelNum_];
-    this->mSignalChart_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH, mSignalBuf_);
+    this->mSignalPlotter_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH, mSignalBuf_);
 
-    ui->graphicsView->setChart(this->mSignalChart_->chart());                                   
-    this->mSignalChart_->setAxisXScale(eegneo::Second::FIVE);
-    this->mSignalChart_->setAxisYScale(10);
+    ui->graphicsView->setChart(this->mSignalPlotter_->chart());                                   
+    this->mSignalPlotter_->setAxisXScale(eegneo::Second::FIVE);
+    this->mSignalPlotter_->setAxisYScale(10);
 }
 
 void AcquisitionWindow::initFFTChart()
 {
-    this->mFFTChart_ = new eegneo::FFTWavePlotter(this->mChannelNum_, this->mSampleRate_);
-    ui->graphicsView_2->setChart(this->mFFTChart_->chart());
-    this->mFFTChart_->setAxisXScale(eegneo::Frequency::SIXTY);
-    this->mFFTChart_->setAxisYScale(50);
+    this->mFFTPlotter_ = new eegneo::FFTWavePlotter(this->mChannelNum_, this->mSampleRate_);
+    ui->graphicsView_2->setChart(this->mFFTPlotter_->chart());
+    this->mFFTPlotter_->setAxisXScale(eegneo::Frequency::SIXTY);
+    this->mFFTPlotter_->setAxisYScale(50);
 }
 
 // 波形更新
@@ -172,7 +162,7 @@ void AcquisitionWindow::updateWave()
     ::memcpy(mSignalBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
     if (!mSharedMemory_->unlock()) return;
 
-    mSignalChart_->update();
+    mSignalPlotter_->update();
 }
 
 void AcquisitionWindow::updateFFT()
@@ -183,8 +173,8 @@ void AcquisitionWindow::updateFFT()
 
     for (std::size_t i = 0; i < mChannelNum_; ++i)
     {
-        auto& real = mFFTChart_->real(i);
-        auto& im = mFFTChart_->im(i);
+        auto& real = mFFTPlotter_->real(i);
+        auto& im = mFFTPlotter_->im(i);
         ::memcpy(real.data(), pos, real.size());
         pos = (const void*)((const char*)pos + real.size());
         ::memcpy(im.data(), pos, im.size());
@@ -193,7 +183,33 @@ void AcquisitionWindow::updateFFT()
     
     if (!mSharedMemory_->unlock()) return;
 
-    mFFTChart_->update();
+    mFFTPlotter_->update();
+}
+
+void AcquisitionWindow::saveToEDFFormatFile()
+{
+    QString targetFilePath = QFileDialog::getSaveFileName(this, tr("文件保存路径选择"), this->mFileName_, 
+                             tr("EEG Files (*.edf *.EDF)"));
+    eegneo::FileSaveCmd cmd;
+    cmd.sampleRate = this->mSampleRate_;
+    cmd.channelNum = this->mChannelNum_;
+    cmd.fileType = eegneo::EDFFileType::EDF;
+    ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
+    mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(cmd);
+    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
+}
+
+void AcquisitionWindow::saveToBDFFormatFile()
+{
+    QString targetFilePath = QFileDialog::getSaveFileName(this, tr("文件保存路径选择"), this->mFileName_, 
+                             tr("EEG Files (*.bdf *.BDF)"));
+    eegneo::FileSaveCmd cmd;
+    cmd.sampleRate = this->mSampleRate_;
+    cmd.channelNum = this->mChannelNum_;
+    cmd.fileType = eegneo::EDFFileType::BDF;
+    ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
+    mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(cmd);
+    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 
 // 信号与槽的链接
@@ -252,37 +268,6 @@ void AcquisitionWindow::connectSignalAndSlot()
     QObject::connect(ui->action0_1s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(1); });
     QObject::connect(ui->action0_5s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(5); });
     QObject::connect(ui->action0_10s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(10); });
-}
-
-void AcquisitionWindow::setChannelName()
-{
-
-}
-
-void AcquisitionWindow::saveToEDFFormatFile()
-{
-    QString targetFilePath = QFileDialog::getSaveFileName(this, tr("文件保存路径选择"), this->mFileName_, 
-                             tr("EEG Files (*.edf *.EDF)"));
-    eegneo::FileSaveCmd cmd;
-    cmd.sampleRate = this->mSampleRate_;
-    cmd.channelNum = this->mChannelNum_;
-    cmd.fileType = eegneo::EDFFileType::EDF;
-    ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
-    mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(cmd);
-    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
-}
-
-void AcquisitionWindow::saveToBDFFormatFile()
-{
-    QString targetFilePath = QFileDialog::getSaveFileName(this, tr("文件保存路径选择"), this->mFileName_, 
-                             tr("EEG Files (*.bdf *.BDF)"));
-    eegneo::FileSaveCmd cmd;
-    cmd.sampleRate = this->mSampleRate_;
-    cmd.channelNum = this->mChannelNum_;
-    cmd.fileType = eegneo::EDFFileType::BDF;
-    ::memcpy(cmd.filePath, targetFilePath.toStdString().c_str(), targetFilePath.length());
-    mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(cmd);
-    mFileSaveFinishedFlag_ = FILE_SAVE_IN_PROCESS;
 }
 
 // P300实验结束后保存行为学数据

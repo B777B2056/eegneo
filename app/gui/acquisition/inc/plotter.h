@@ -7,6 +7,9 @@
 #include <QColor>
 #include <QValueAxis>
 #include <QCategoryAxis>
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
 #include <QLineSeries>
 #include <QList>
 #include <QPointF>
@@ -32,7 +35,12 @@ namespace eegneo
         SIXTY = 60
     };
 
-    class WavePlotter
+    struct AbstractPlotter
+    {
+        virtual void update() = 0;
+    };
+
+    class WavePlotter : public AbstractPlotter
     {
     public:
         WavePlotter() : mChart_(new QChart()) {}
@@ -98,5 +106,20 @@ namespace eegneo
 
         std::vector<std::vector<float>> mFFTBuf_;
         std::vector<std::tuple<QLineSeries*, QList<QPointF>>> mLines_;
+    };
+
+    class TopographyPlotter : public AbstractPlotter
+    {
+    public:
+        TopographyPlotter(QGraphicsView* view);
+        ~TopographyPlotter();
+
+        void showEvent();
+        void update() override;
+
+    private:
+        QGraphicsView* mView_;
+        QGraphicsScene* mGraphicsScene_;
+        QGraphicsPixmapItem* mGraphicsPixmapItem_;
     };
 }   // namespace eegneo

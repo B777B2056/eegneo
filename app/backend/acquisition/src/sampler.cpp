@@ -56,19 +56,11 @@ namespace eegneo
         : EEGDataSampler(channelNum)
         , mEDFReader_(TEST_DATA_FILE_PATH)
     {
-        std::vector<double> maxV, minV;
-        for (std::size_t i = 0; i < mChannelNum_; ++i)
-        {
-            maxV.push_back(maxInVector(mEDFReader_.channel(i)));
-            minV.push_back(minInVector(mEDFReader_.channel(i)));
-        }
-        QObject::connect(&timer, &QTimer::timeout, [this, maxV, minV]()->void
+        QObject::connect(&timer, &QTimer::timeout, [this]()->void
         {
             for (std::size_t i = 0; i < mChannelNum_; ++i)
             {
-                double tmp = mEDFReader_.channel(i)[idx % mEDFReader_.channel(i).size()];
-                double k = 10.0 / (maxV[i] - minV[i]);
-                mBuf_[i] = k * (tmp - minV[i]);
+                mBuf_[i] = mEDFReader_.channel(i)[idx % mEDFReader_.channel(i).size()];
             }
             ++idx;
             this->doRecordData();

@@ -1,6 +1,5 @@
 #include "file.h"
 #include <fstream>
-#include <iostream>  
 extern "C" 
 { 
 #include "third/edf/edflib.h" 
@@ -38,12 +37,10 @@ namespace eegneo
             }
             // 读取通道数
             this->mChannelNum_ = edfhdr.edfsignals; 
-            std::cout << "channel count: " << this->mChannelNum_ << "\n"; 
             this->mData_.resize(this->mChannelNum_);
             this->mChannelNames_.resize(this->mChannelNum_);
             //读取采样率
             this->mSampleFreqencyHz_ = edfhdr.signalparam[0].smp_in_datarecord/(edfhdr.datarecord_duration/10000000);
-            std::cout << this->mSampleFreqencyHz_ << "Hz\n";
             // 读取数据
             for (int i = 0; i < edfhdr.edfsignals; ++i)
             {
