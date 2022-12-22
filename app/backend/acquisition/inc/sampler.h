@@ -75,7 +75,7 @@ namespace eegneo
         void sampleOnce() override;
 
     private:
-        static constexpr double MAGIC_COFF = 0.022351744455307063;
+        static constexpr double MagicCoefficient = 0.022351744455307063;
     };
 
     class ShanxiDataSampler : public EEGDataSampler

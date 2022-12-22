@@ -200,7 +200,7 @@ namespace eegneo
     double ShanghaiDataSampler::turnBytes2uV(char byte1, char byte2, char byte3)
     {
         int target = ((int)byte1 << 16) + (((int)byte2 << 8) & 0x0000ffff) + ((int)byte3 & 0x000000ff);
-        return (double)target * MAGIC_COFF;
+        return (double)target * MagicCoefficient;
     }
 
     ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
