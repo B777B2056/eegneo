@@ -68,6 +68,7 @@ namespace eegneo
         void update() override;
 
     private:
+        int mMaxVoltage_ = 0;
         std::size_t mSampleRate_;
         std::size_t mFreshRate_;
         qreal mMoveOffset_;
@@ -81,6 +82,8 @@ namespace eegneo
         std::vector<std::tuple<QLineSeries*, QGraphicsSimpleTextItem*, QList<QPointF>>> mMarkerLineTbl_;
 
         void setLineColor(QLineSeries* line);   
+        void updateWave();
+        void updateMarker();
     };
 
     class FFTWavePlotter : public WavePlotter

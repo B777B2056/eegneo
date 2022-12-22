@@ -13,9 +13,6 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class AcquisitionWindow; }
 QT_END_NAMESPACE
 
-#define GRAPH_FRESH 50  // 触发波形显示定时器的时间，单位为ms
-#define MANUAL_MAKER 4 // 手动Mark数量
-
 class AcquisitionWindow : public QMainWindow
 {
     Q_OBJECT
@@ -41,8 +38,9 @@ private:
     // 创建Marker
     void createMark(const QString& event);
     // 更新波形显示
-    void updateWave();
+    void updateEEG();
     void updateFFT();
+    void updateTopography();
     // 设置Y轴范围
     void setVoltageAxisScale(int curMaxVoltage);
     // 设置X轴范围

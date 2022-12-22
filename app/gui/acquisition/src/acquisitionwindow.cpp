@@ -12,9 +12,17 @@
 #pragma execution_character_set("utf-8")
 #endif
 
-#define FILE_SAVE_NOT_START 1
-#define FILE_SAVE_IN_PROCESS 2
-#define FILE_SAVE_FINISHED 3
+namespace 
+{
+    enum FileSaveState : std::uint8_t
+    {
+        FILE_SAVE_NOT_START = 1,
+        FILE_SAVE_IN_PROCESS,
+        FILE_SAVE_FINISHED
+    };
+
+    constexpr std::uint16_t GRAPH_FRESH = 50;   // 触发波形显示定时器的时间，单位为ms
+}
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -88,7 +96,12 @@ void AcquisitionWindow::show()
         this->initSignalChart();
         this->initFFTChart();
 
-        QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void{ this->updateWave(); this->updateFFT(); });
+        QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void
+        { 
+            this->updateEEG(); 
+            this->updateFFT(); 
+            this->updateTopography();
+        });
         this->mPlotTimer_->start(GRAPH_FRESH);
 
         QMainWindow::show();
@@ -156,7 +169,7 @@ void AcquisitionWindow::initFFTChart()
 }
 
 // 波形更新
-void AcquisitionWindow::updateWave()
+void AcquisitionWindow::updateEEG()
 {
     if (!mSharedMemory_->lock()) return;
     ::memcpy(mSignalBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
@@ -184,6 +197,11 @@ void AcquisitionWindow::updateFFT()
     if (!mSharedMemory_->unlock()) return;
 
     mFFTPlotter_->update();
+}
+
+void AcquisitionWindow::updateTopography()
+{
+    // TODO
 }
 
 void AcquisitionWindow::saveToEDFFormatFile()
@@ -269,145 +287,3 @@ void AcquisitionWindow::connectSignalAndSlot()
     QObject::connect(ui->action0_5s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(5); });
     QObject::connect(ui->action0_10s, &QAction::triggered, [this]()->void{ this->setTimeAxisScale(10); });
 }
-
-// P300实验结束后保存行为学数据
-// void AcquisitionWindow::saveBehavioralP300(const std::string& path)
-// {
-//     int col = 0;
-//     std::ifstream events_read;
-//     std::vector<int> blank_acc, blank_rt, blank_resp, on_set_time, blank_rttime;
-//     std::vector<std::string> code;
-//     std::vector<std::pair<double, std::string>> vec;
-//     events_read.open(_fileInfo.tempFiles + "_events.txt");
-//     while(events_read.peek() != EOF)
-//     {
-//         std::string str;
-//         std::getline(events_read, str);
-//         if(col)
-//         {
-//             long long run_time;
-//             std::string event;
-//             std::stringstream ss(str);
-//             ss >> run_time >> event;
-//             vec.push_back(std::make_pair(run_time, event));
-//         }
-//         ++col;
-//     }
-//     for(std::size_t i = 0; i < vec.size() - 1; ++i)
-//     {
-//         if(vec[i].second == "2")
-//         {
-//             if(vec[i + 1].second == "Response")
-//             {
-//                 // 对2有反应，说明反应正确
-//                 blank_acc.push_back(1);
-//                 // 计算反应时间，单位为毫秒，在表格中对应2的位置
-//                 blank_rt.push_back((int)((vec[i + 1].first - vec[i].first) / 10));
-//                 // 对2有反应，按键正确
-//                 blank_resp.push_back(1);
-//                 // 反应动作的时间，毫秒
-//                 blank_rttime.push_back((int)(vec[i + 1].first / 10));
-//             }
-//             else
-//             {
-//                 blank_acc.push_back(0);
-//                 blank_resp.push_back(0);
-//                 blank_rt.push_back(0);
-//                 blank_rttime.push_back(0);
-//             }
-//             code.push_back("2");
-//             on_set_time.push_back((int)(vec[i].first / 10));
-//         }
-//         else if(vec[i].second == "8")
-//         {
-//             // 对8有反应，说明反应错误
-//             if(vec[i + 1].second == "Response")
-//             {
-//                 blank_acc.push_back(0);
-//                 blank_resp.push_back(1);
-//                 blank_rt.push_back((int)((vec[i + 1].first - vec[i].first) / 10));
-//                 blank_rttime.push_back((int)(vec[i + 1].first / 10));
-//             }
-//             // 对8无反应，说明反应正确
-//             else
-//             {
-//                 blank_acc.push_back(1);
-//                 blank_resp.push_back(-1);
-//                 blank_rt.push_back(-1);
-//                 blank_rttime.push_back(-1);
-//             }
-//             code.push_back("8");
-//             on_set_time.push_back((int)(vec[i].first / 10));
-//         }
-//     }
-//     events_read.close();
-//     std::string file_name = this->mFileName_.toStdString();
-//     std::ofstream beh_file;
-//     beh_file.open(path + "\\" + file_name + "_behavioral.csv");
-//     beh_file.close();
-//     beh_file.open(path + "\\" + file_name + "_behavioral.csv", std::ios::app);
-//     beh_file << "Experiment Name: " << "NO NAME SETED"
-//              << ", Date: " << QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss").toStdString()
-//              << std::endl;
-//     beh_file << "Subject,Trial,blank.ACC,blank.CRESP,blank.OnsetTime,blank.RESP,blank.RT,blank.RTTime,code,correct,pic" << std::endl;
-//     // 预实验
-//     for(int i = 0; i < 40; i++)
-//     {
-//         std::string pre_exp = this->mFileName_.toStdString() + "," + std::to_string(i + 1);
-//         for(int j = 0; j < 9; j++)
-//         {
-//             pre_exp += ",";
-//         }
-//         beh_file << pre_exp << std::endl;
-//     }
-//     // 正式实验
-//     for(int i = 0; i < _p300OddballImgNum; i++)
-//     {
-//         //Subject
-//         beh_file << this->mFileName_.toStdString();
-//         beh_file << ",";
-//         //Trial
-//         beh_file << std::to_string(i + 1);
-//         beh_file << ",";
-//         //blank.ACC
-//         beh_file << blank_acc[i];
-//         beh_file << ",";
-//         //blank.CRESP
-//         if(code[i] == "2")
-//             beh_file << "1";
-//         beh_file << ",";
-//         //blank.OnsetTime
-//         if(code[i] == "2")
-//             beh_file << on_set_time[i];
-//         beh_file << ",";
-//         //blank.RESP
-//         if(blank_resp[i] == 1)
-//             beh_file << blank_resp[i];
-//         beh_file << ",";
-//         //blank.RT
-//         if(code[i] == "2" || blank_resp[i] == 1)
-//             beh_file << blank_rt[i];
-//         else
-//             beh_file << 0;
-//         beh_file << ",";
-//         //blank.RTTime
-//         if(code[i] == "2" || blank_resp[i] == 1)
-//             beh_file << blank_rttime[i];
-//         else
-//             beh_file << 0;
-//         beh_file << ",";
-//         //code
-//         beh_file << code[i];
-//         beh_file << ",";
-//         //correct
-//         if(code[i] == "2")
-//             beh_file << "1";
-//         beh_file << ",";
-//         //pic
-//         if(code[i] == "2")
-//             beh_file << "2.bmp" << std::endl;
-//         else
-//             beh_file << "8.bmp" << std::endl;
-//     }
-//     beh_file.close();
-// }

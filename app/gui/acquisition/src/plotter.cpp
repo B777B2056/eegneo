@@ -63,8 +63,9 @@ namespace eegneo
 
     void EEGWavePlotter::setAxisYScale(int maxVoltage)
     {
-        mAxisY_.setMin(-maxVoltage); mAxisY_.setMax(-maxVoltage + mData_.size() * maxVoltage);
-
+        this->mMaxVoltage_ = maxVoltage;
+        mAxisY_.setMin(-maxVoltage); mAxisY_.setMax(-maxVoltage + mData_.size() * 2 * maxVoltage);
+        
         auto& config = eegneo::utils::ConfigLoader::instance();
         auto names = config.get<std::vector<std::string>>("Acquisition", "Electrodes");
         for (int c = 0; c < mData_.size(); ++c)
@@ -73,7 +74,7 @@ namespace eegneo
         }
         for (int c = 0; c < mData_.size(); ++c)
         {
-            mAxisY_.append(QString::fromStdString(names[c]), -maxVoltage + ((mAxisY_.max() - mAxisY_.min()) / mData_.size()) * (c + 0.5));
+            mAxisY_.append(QString::fromStdString(names[c]), 2 * maxVoltage * c);
         }
         
         mAxisY_.setLabelsPosition(QCategoryAxis::AxisLabelsPositionOnValue);
@@ -98,7 +99,20 @@ namespace eegneo
 
     void EEGWavePlotter::update()
     {
-        // 更新波形
+        this->updateWave();
+        this->updateMarker();
+    }
+
+    void EEGWavePlotter::setLineColor(QLineSeries* line)
+    {
+        QPen splinePen; 
+        splinePen.setBrush(Qt::red);
+        splinePen.setColor(Qt::red);
+        line->setPen(splinePen);
+    }
+
+    void EEGWavePlotter::updateWave()
+    {
         if(static_cast<std::size_t>(mData_[0].size()) >= (mFreshRate_ * static_cast<std::size_t>(mAxisX_.max() - mAxisX_.min()) / mSampleRate_))
         {
             for (int i = 0; i < mData_.size(); ++i)
@@ -111,12 +125,16 @@ namespace eegneo
             }
         }
 
+        qreal xPos = mData_[0].size() * mMoveOffset_;
         for (int i = 0; i < mData_.size(); ++i)
         {
-            mData_[i].emplace_back(mData_[0].size() * mMoveOffset_, mBuf_[i] + ((mAxisY_.max() - mAxisY_.min()) / mData_.size()) * i);
+            mData_[i].emplace_back(xPos, mBuf_[i] + (2 * this->mMaxVoltage_ * i));
             mLineSeries_[i].replace(mData_[i]);
         }
-        // 更新Marker
+    }
+
+    void EEGWavePlotter::updateMarker()
+    {
         for (auto iter = mMarkerLineTbl_.begin(); iter != mMarkerLineTbl_.end(); )
         {
             auto& [line, text, points] = *iter;
@@ -143,14 +161,6 @@ namespace eegneo
                 ++iter;
             }
         }
-    }
-
-    void EEGWavePlotter::setLineColor(QLineSeries* line)
-    {
-        QPen splinePen; 
-        splinePen.setBrush(Qt::red);
-        splinePen.setColor(Qt::red);
-        line->setPen(splinePen);
     }
 
     FFTWavePlotter::FFTWavePlotter(std::size_t channelNum, std::size_t sampleRate)
@@ -222,7 +232,7 @@ namespace eegneo
     TopographyPlotter::TopographyPlotter(QGraphicsView* view)
         : mView_(view)
         , mGraphicsScene_(new QGraphicsScene())
-        , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap(":/images/resource/Images/eeg_10_20.png")))
+        , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap(":/images/resource/Images/eegtopo.jpg")))
     {
         mGraphicsScene_->setSceneRect(500, 500, 190, 190);  
         mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
