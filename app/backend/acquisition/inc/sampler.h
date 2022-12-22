@@ -1,9 +1,12 @@
 #pragma once
+#include <cstdint>
+#include <fstream>
+#include <span>
 #include <QSerialPort>
 #include <QString>
 #include <QUdpSocket>
 #include <QTimer>
-#include <fstream>
+#include "third/usb/libusb.h"
 #include "utils/file.h"
 
 namespace eegneo
@@ -85,6 +88,31 @@ namespace eegneo
         QUdpSocket client;
         double turnBytes2uV(unsigned char *bytes);
 
+        void sampleOnce() override;
+    };
+
+    class UsbDataSampler : public EEGDataSampler
+    {
+    public:
+        UsbDataSampler(std::size_t channelNum);
+        ~UsbDataSampler();
+
+    private:
+        using BYTE = unsigned char;
+        static constexpr std::uint16_t VendorId = 0x0483;
+        static constexpr std::uint16_t ProductId = 0x6001;
+        static constexpr double MagicCoefficient = 0.02235;
+
+    private:
+        BYTE* mRawBuf_;
+        struct libusb_device_handle* mUsbHolderPtr_;
+
+        void findDevice();
+        bool checkConfig() const;
+        void configDevice();
+        void startTransfer();
+        void readFromDevice(std::span<BYTE> buf);
+        void writeIntoDevice(std::span<BYTE> buf);
         void sampleOnce() override;
     };
 }   // namespace eegneo

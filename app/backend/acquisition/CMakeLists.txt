@@ -9,5 +9,6 @@ include_directories("inc")
 file(GLOB HEADERS "../../utils/ipc.h")
 file(GLOB SOURCES "src/*.cpp" "../../utils/*.cpp" "../../third/fft/*.cpp" "../../third/edf/edflib.c")
 
+link_directories("../../third/usb")
 add_executable(eegneo_sampler "../../resource.qrc" ${HEADERS} ${SOURCES})
-target_link_libraries(eegneo_sampler PRIVATE Qt6::Core Qt6::SerialPort Qt6::Network Qt6::Concurrent iir::iir_static)
+target_link_libraries(eegneo_sampler PRIVATE Qt6::Core Qt6::SerialPort Qt6::Network Qt6::Concurrent iir::iir_static libusb)

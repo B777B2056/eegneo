@@ -285,4 +285,156 @@ namespace eegneo
         curNum *= pow(-1, sign);
         return curNum;
     }
+
+    UsbDataSampler::UsbDataSampler(std::size_t channelNum)
+        : EEGDataSampler(channelNum)
+        , mRawBuf_(new BYTE[3 * channelNum + 1])
+        , mUsbHolderPtr_(nullptr)
+    {
+        // 初始化libusb
+        if (LIBUSB_SUCCESS != ::libusb_init(nullptr))
+        {
+            // Error
+            return;
+        }
+        // 打开指定usb设备
+        if (this->findDevice(); !mUsbHolderPtr_)
+        {
+            // Error
+            return;
+        }
+        // 检查usb设备是否已经被操作系统配置
+        if (this->checkConfig())
+        {   
+            // 若未配置，则配置usb设备
+            this->configDevice();
+        }
+        // 初始化USB设备接口
+        if (LIBUSB_SUCCESS != ::libusb_claim_interface(mUsbHolderPtr_, 0))
+        {
+            // Error
+            return;
+        }
+        // 发送启动命令
+        this->startTransfer();
+    }
+
+    UsbDataSampler::~UsbDataSampler()
+    {
+        ::libusb_release_interface(mUsbHolderPtr_, 0);
+        ::libusb_close(mUsbHolderPtr_);
+        ::libusb_exit(nullptr);
+        delete[] mRawBuf_;
+    }
+
+    void UsbDataSampler::findDevice()
+    {
+        struct libusb_device** devs; 
+        int cnt = ::libusb_get_device_list(nullptr, &devs);
+        if (cnt < 0)
+        {
+            // Error
+            return;
+        }
+        // 遍历设备列表，查找匹配要求的设备
+        int ret;
+        for (int i = 0; i < cnt; ++i)
+        {
+            struct libusb_device_descriptor desc;
+            ret = ::libusb_get_device_descriptor(devs[i], &desc);
+            if (LIBUSB_SUCCESS != ret) 
+            {
+                // Error
+                return;
+            }
+
+            struct libusb_config_descriptor* config;
+            ret = ::libusb_get_active_config_descriptor(devs[i], &config);
+            if (LIBUSB_SUCCESS != ret) 
+            {
+                // Error
+                return;
+            }
+
+            if((VendorId == desc.idVendor) && (ProductId == desc.idProduct) && (0 == config->bNumInterfaces)) 
+            {
+                // 打开目标设备
+                ret = ::libusb_open(devs[i], &this->mUsbHolderPtr_); 
+                if(LIBUSB_SUCCESS != ret) 
+                {
+                    // Error
+                }
+                ::libusb_free_config_descriptor(config);
+                ::libusb_free_device_list(devs, 1);
+                return;
+            }
+            ::libusb_free_config_descriptor(config);
+        }
+        ::libusb_free_device_list(devs, 1);
+    }
+
+    bool UsbDataSampler::checkConfig() const
+    {
+        int configuration = 0;
+        if (LIBUSB_SUCCESS != ::libusb_get_configuration(mUsbHolderPtr_, &configuration)) 
+        {
+            // Error
+            return false;
+        }
+        return configuration > 0;
+    }
+
+    void UsbDataSampler::configDevice()
+    {
+        if (LIBUSB_SUCCESS != ::libusb_set_configuration(mUsbHolderPtr_, 1))
+        {
+            // Error
+            return;
+        }
+    }
+
+    void UsbDataSampler::startTransfer()
+    {
+        BYTE buf[1024] = {0xAD,0x02};
+        this->writeIntoDevice({buf, 2});
+        this->readFromDevice({buf, 512 * 2});
+        
+        buf[0] = 0xAD; buf[1] = 0x00;
+        this->writeIntoDevice({buf, 2});
+
+        this->readFromDevice({buf, 36});
+        if (0xAE != buf[0])
+        {
+            // Error
+            return;
+        }
+
+        buf[0] = 0xAD; buf[1] = 0x01;
+        this->writeIntoDevice({buf, 2});
+    }
+
+    void UsbDataSampler::readFromDevice(std::span<BYTE> buf)
+    {
+        // TODO
+    }
+
+    void UsbDataSampler::writeIntoDevice(std::span<BYTE> buf)
+    {
+        // TODO
+    }
+
+    void UsbDataSampler::sampleOnce()
+    {
+        this->readFromDevice({this->mRawBuf_, 3 * this->mChannelNum_ + 1});
+        for (std::size_t i = 0; i < this->mChannelNum_; ++i)
+        {
+            // 以大端字节序解析原始数据
+            std::uint32_t rawNum = 0;
+            rawNum |= this->mRawBuf_[3 * i];     rawNum <<= 16;
+            rawNum |= this->mRawBuf_[3 * i + 1]; rawNum <<= 8;
+            rawNum |= this->mRawBuf_[3 * i + 2];
+            // 乘以系数转换为可读数据
+            this->mBuf_[i] = MagicCoefficient * static_cast<std::int32_t>(rawNum);
+        }
+    }
 }   // namespace eegneo
