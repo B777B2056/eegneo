@@ -1,6 +1,8 @@
 #include "sampler.h"
 #include <cstring>
 #include <cstdlib>
+#include <chrono>
+#include <thread>
 #include <QByteArray>
 #include <QTcpSocket>
 
@@ -289,7 +291,6 @@ namespace eegneo
     UsbDataSampler::UsbDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
         , mRawBuf_(new BYTE[3 * channelNum + 1])
-        , mUsbHolderPtr_(nullptr)
     {
         // 初始化libusb
         if (LIBUSB_SUCCESS != ::libusb_init(nullptr))
@@ -298,23 +299,7 @@ namespace eegneo
             return;
         }
         // 打开指定usb设备
-        if (this->findDevice(); !mUsbHolderPtr_)
-        {
-            // Error
-            return;
-        }
-        // 检查usb设备是否已经被操作系统配置
-        if (this->checkConfig())
-        {   
-            // 若未配置，则配置usb设备
-            this->configDevice();
-        }
-        // 初始化USB设备接口
-        if (LIBUSB_SUCCESS != ::libusb_claim_interface(mUsbHolderPtr_, 0))
-        {
-            // Error
-            return;
-        }
+        this->findAndInitDevice();
         // 发送启动命令
         this->startTransfer();
     }
@@ -327,50 +312,66 @@ namespace eegneo
         delete[] mRawBuf_;
     }
 
-    void UsbDataSampler::findDevice()
+    void UsbDataSampler::findAndInitDevice()
     {
-        struct libusb_device** devs; 
-        int cnt = ::libusb_get_device_list(nullptr, &devs);
-        if (cnt < 0)
+        // 打开指定设备
+        this->mUsbHolderPtr_ = ::libusb_open_device_with_vid_pid(nullptr, VendorId, ProductId);
+        if (!this->mUsbHolderPtr_)
         {
             // Error
             return;
         }
-        // 遍历设备列表，查找匹配要求的设备
-        int ret;
-        for (int i = 0; i < cnt; ++i)
-        {
-            struct libusb_device_descriptor desc;
-            ret = ::libusb_get_device_descriptor(devs[i], &desc);
-            if (LIBUSB_SUCCESS != ret) 
-            {
-                // Error
-                return;
-            }
-
-            struct libusb_config_descriptor* config;
-            ret = ::libusb_get_active_config_descriptor(devs[i], &config);
-            if (LIBUSB_SUCCESS != ret) 
-            {
-                // Error
-                return;
-            }
-
-            if((VendorId == desc.idVendor) && (ProductId == desc.idProduct) && (0 == config->bNumInterfaces)) 
-            {
-                // 打开目标设备
-                ret = ::libusb_open(devs[i], &this->mUsbHolderPtr_); 
-                if(LIBUSB_SUCCESS != ret) 
-                {
-                    // Error
-                }
-                ::libusb_free_config_descriptor(config);
-                ::libusb_free_device_list(devs, 1);
-                return;
-            }
-            ::libusb_free_config_descriptor(config);
+        // 检查usb设备是否已经被操作系统配置
+        if (this->checkConfig())
+        {   
+            // 若未配置，则配置usb设备
+            this->configDevice();
         }
-        ::libusb_free_device_list(devs, 1);
+        // 设置端点
+        struct libusb_config_descriptor* config;
+        if (LIBUSB_SUCCESS != ::libusb_get_active_config_descriptor(::libusb_get_device(this->mUsbHolderPtr_), &config)) 
+        {
+            // Error
+            goto CLEAN;
+        }
+        // 匹配第一个输入输出端点
+        for (std::uint8_t i = 0; i < config->bNumInterfaces; ++i)
+        {
+            auto& interface = config->interface[i];
+            for (int j = 0; j < interface.num_altsetting; ++j)
+            {
+                auto& interfaceDescriptor = interface.altsetting[j];
+                for (std::uint8_t k = 0; j < interfaceDescriptor.bNumEndpoints; ++k)
+                {
+                    if (this->mEpIN_ && this->mEpOUT_)  goto CLEAN;
+                    auto& endpointDescriptor = interfaceDescriptor.endpoint[k];
+                    if ((endpointDescriptor.bmAttributes & LIBUSB_TRANSFER_TYPE_MASK) & (LIBUSB_TRANSFER_TYPE_BULK)) 
+                    {
+                        if (LIBUSB_ENDPOINT_IN == (LIBUSB_ENDPOINT_IN & endpointDescriptor.bEndpointAddress))
+                        {
+                            this->mEpIN_ = endpointDescriptor.bEndpointAddress;
+                            ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpIN_); //清除暂停标志
+                        }
+                        else if (LIBUSB_ENDPOINT_OUT == (LIBUSB_ENDPOINT_OUT & endpointDescriptor.bEndpointAddress))
+                        {
+                            this->mEpOUT_ = endpointDescriptor.bEndpointAddress;
+                            ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpOUT_); //清除暂停标志
+                        }
+                    }
+                }
+            }
+        }
+        // 启用内核驱动程序自动分离
+        ::libusb_set_auto_detach_kernel_driver(this->mUsbHolderPtr_, 1);
+        // 初始化USB设备接口
+        if (LIBUSB_SUCCESS != ::libusb_claim_interface(this->mUsbHolderPtr_, 0))
+        {
+            // Error
+            return;
+        }
+        // 释放资源
+    CLEAN:
+        ::libusb_free_config_descriptor(config);
     }
 
     bool UsbDataSampler::checkConfig() const
@@ -397,10 +398,14 @@ namespace eegneo
     {
         BYTE buf[1024] = {0xAD,0x02};
         this->writeIntoDevice({buf, 2});
-        this->readFromDevice({buf, 512 * 2});
+        this->readFromDevice({buf, 512});
+        this->readFromDevice({buf, 512});
         
         buf[0] = 0xAD; buf[1] = 0x00;
         this->writeIntoDevice({buf, 2});
+
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(4s);
 
         this->readFromDevice({buf, 36});
         if (0xAE != buf[0])
@@ -415,12 +420,34 @@ namespace eegneo
 
     void UsbDataSampler::readFromDevice(std::span<BYTE> buf)
     {
-        // TODO
+        int length = static_cast<int>(buf.size_bytes());
+        for (int bytesTransferred = 0; bytesTransferred < length; )
+        {
+            int ret = ::libusb_bulk_transfer(this->mUsbHolderPtr_, this->mEpIN_, 
+                                             buf.data() + bytesTransferred, length - bytesTransferred, 
+                                             &bytesTransferred, 0u);
+            if (LIBUSB_SUCCESS != ret)
+            {
+                // Error
+                return;
+            }
+        }
     }
 
     void UsbDataSampler::writeIntoDevice(std::span<BYTE> buf)
     {
-        // TODO
+        int length = static_cast<int>(buf.size_bytes());
+        for (int bytesTransferred = 0; bytesTransferred < length; )
+        {
+            int ret = ::libusb_bulk_transfer(this->mUsbHolderPtr_, this->mEpOUT_, 
+                                             buf.data() + bytesTransferred, length - bytesTransferred, 
+                                             &bytesTransferred, 0u);
+            if (LIBUSB_SUCCESS != ret)
+            {
+                // Error
+                return;
+            }
+        }
     }
 
     void UsbDataSampler::sampleOnce()

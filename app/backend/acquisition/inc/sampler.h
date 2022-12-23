@@ -105,9 +105,11 @@ namespace eegneo
 
     private:
         BYTE* mRawBuf_;
-        struct libusb_device_handle* mUsbHolderPtr_;
+        struct libusb_device_handle* mUsbHolderPtr_ = nullptr;
+        std::uint8_t mEpIN_ = 0;
+        std::uint8_t mEpOUT_ = 0;
 
-        void findDevice();
+        void findAndInitDevice();
         bool checkConfig() const;
         void configDevice();
         void startTransfer();
