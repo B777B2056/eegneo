@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <chrono>
 #include <fstream>
 #include <span>
 #include <QSerialPort>
@@ -23,6 +24,8 @@ namespace eegneo
         EEGDataSampler& operator=(EEGDataSampler&&) = default;
         virtual ~EEGDataSampler() { delete[] mBuf_; }
 
+        void doRecordData();
+        virtual void sampleOnce() = 0;
         void doRecordEvent(const char* msg);
 
         const double* data() const { return mBuf_; }
@@ -37,9 +40,6 @@ namespace eegneo
         bool mIsRecord_;
         std::uint64_t mCurDataN_; 
         std::fstream mDataFile_, mEventFile_;
-
-        void doRecordData();
-        virtual void sampleOnce() = 0;
     };
 
     class TestDataSampler : public EEGDataSampler
@@ -48,13 +48,13 @@ namespace eegneo
         TestDataSampler(std::size_t channelNum);
         ~TestDataSampler() = default;
 
+        void sampleOnce() override;
+
     private:
-        QTimer timer;
         int idx = 0;
+        std::chrono::time_point<std::chrono::steady_clock> mLastTimePoint_;
         const char* TEST_DATA_FILE_PATH = "E:/jr/eegneo/test/data/S001R01.edf";
         utils::EDFReader mEDFReader_;
-
-        void sampleOnce() override;
     };
 
     class ShanghaiDataSampler : public EEGDataSampler
@@ -63,39 +63,40 @@ namespace eegneo
         ShanghaiDataSampler(std::size_t channelNum, const QString& portName);
         ~ShanghaiDataSampler();
 
+        void sampleOnce() override;
+
     private:
         QString mPortName_;
         QSerialPort mSerialPort_;
 
         void initSerialPort();
         void sendStartCmd();
-        void handle();
         double turnBytes2uV(char byte1, char byte2, char byte3);
-
-        void sampleOnce() override;
 
     private:
         static constexpr double MagicCoefficient = 0.022351744455307063;
     };
 
-    class ShanxiDataSampler : public EEGDataSampler
-    {
-    public:
-        ShanxiDataSampler(std::size_t channelNum);
-        ~ShanxiDataSampler() = default;
+    // class ShanxiDataSampler : public EEGDataSampler
+    // {
+    // public:
+    //     ShanxiDataSampler(std::size_t channelNum);
+    //     ~ShanxiDataSampler() = default;
 
-    private:
-        QUdpSocket client;
-        double turnBytes2uV(unsigned char *bytes);
+    //     void sampleOnce() override;
 
-        void sampleOnce() override;
-    };
+    // private:
+    //     QUdpSocket client;
+    //     double turnBytes2uV(unsigned char *bytes);
+    // };
 
     class UsbDataSampler : public EEGDataSampler
     {
     public:
         UsbDataSampler(std::size_t channelNum);
         ~UsbDataSampler();
+
+        void sampleOnce() override;
 
     private:
         using BYTE = unsigned char;
@@ -115,6 +116,5 @@ namespace eegneo
         void startTransfer();
         void readFromDevice(std::span<BYTE> buf);
         void writeIntoDevice(std::span<BYTE> buf);
-        void sampleOnce() override;
     };
 }   // namespace eegneo

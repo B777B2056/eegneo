@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <thread>
+#include <QCoreApplication>
 #include <QByteArray>
 #include <QTcpSocket>
 
@@ -34,45 +35,25 @@ namespace eegneo
         this->mEventFile_ << this->mCurDataN_ << ":" << msg << std::endl;
     }
 
-    static double maxInVector(const std::vector<double>& vec)
-    {
-        double ret = vec[0];
-        for (std::size_t i = 1; i < vec.size(); ++i)
-        {
-            if (vec[i] > ret)   ret = vec[i];
-        }
-        return ret;
-    }
-
-    static double minInVector(const std::vector<double>& vec)
-    {
-        double ret = vec[0];
-        for (std::size_t i = 1; i < vec.size(); ++i)
-        {
-            if (vec[i] < ret)   ret = vec[i];
-        }
-        return ret;
-    }
-
     TestDataSampler::TestDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
+        , mLastTimePoint_(std::chrono::steady_clock::now())
         , mEDFReader_(TEST_DATA_FILE_PATH)
     {
-        QObject::connect(&timer, &QTimer::timeout, [this]()->void
-        {
-            for (std::size_t i = 0; i < mChannelNum_; ++i)
-            {
-                mBuf_[i] = mEDFReader_.channel(i)[idx % mEDFReader_.channel(i).size()];
-            }
-            ++idx;
-            this->doRecordData();
-        });
-        timer.start(1000.0/mEDFReader_.sampleFreqencyHz());
+
     }
 
     void TestDataSampler::sampleOnce()
     {
+        auto targetTimePoint = this->mLastTimePoint_ + std::chrono::milliseconds((int)(1000.0 / mEDFReader_.sampleFreqencyHz()));
+        while (targetTimePoint > std::chrono::steady_clock::now());
+        this->mLastTimePoint_ = std::chrono::steady_clock::now();
 
+        for (std::size_t i = 0; i < mChannelNum_; ++i)
+        {
+            mBuf_[i] = mEDFReader_.channel(i)[idx % mEDFReader_.channel(i).size()];
+        }
+        ++idx;
     }
 
     static void SendData2SerialPort(QSerialPort& serialPort, const QByteArray& data)
@@ -88,24 +69,16 @@ namespace eegneo
         this->initSerialPort();
         if (!mSerialPort_.open(QSerialPort::ReadWrite))
         {
-            // Handle open series port error 
+            // Error 
+            return;
         }
+        this->sendStartCmd();
     }
 
     ShanghaiDataSampler::~ShanghaiDataSampler()
     {
         mSerialPort_.clear();
         mSerialPort_.close();
-    }
-
-    void ShanghaiDataSampler::sampleOnce()
-    {
-        if (!mSerialPort_.isOpen())
-        {
-            return;
-        }
-        this->sendStartCmd();
-        this->handle();
     }
 
     void ShanghaiDataSampler::initSerialPort()
@@ -148,7 +121,7 @@ namespace eegneo
 
     // 帧头：C0 A0
     // 帧尾：6个0
-    void ShanghaiDataSampler::handle()
+    void ShanghaiDataSampler::sampleOnce()
     {
         int cur_channel = 0, state_machine = 0;
         char ch = 0;
@@ -176,10 +149,6 @@ namespace eegneo
             }
             else if(state_machine < 28)
             {
-                if(cur_channel == 8)
-                {
-                    cur_channel = 0;
-                }
                 if(!((state_machine - 3) % 3) && (state_machine > 3))
                 {
                     mBuf_[cur_channel++] = turnBytes2uV(single_num[0], single_num[1], single_num[2]);
@@ -195,7 +164,7 @@ namespace eegneo
                     state_machine = 0;
             }
             else
-                state_machine = 0;
+                return;
         }
     }
 
@@ -205,88 +174,88 @@ namespace eegneo
         return (double)target * MagicCoefficient;
     }
 
-    ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
-        : EEGDataSampler(channelNum)
-    {
-        client.bind(QHostAddress::LocalHost, 4000);
-    }
+    // ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
+    //     : EEGDataSampler(channelNum)
+    // {
+    //     client.bind(QHostAddress::LocalHost, 4000);
+    // }
 
-    void ShanxiDataSampler::sampleOnce()
-    {
-        while(!client.hasPendingDatagrams());
-        char bytes[72];
-        int size = client.readDatagram(bytes, 72);
-        for(int i = 0; i < size; i++)
-        {
-            if((i < size - 1)
-                    && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
-            {
-                if((i < size - 71)
-                        && (bytes[i + 66] == (char)0x00) && (bytes[i + 67] == (char)0x00)
-                        && (bytes[i + 68] == (char)0x00) && (bytes[i + 69] == (char)0x00)
-                        && (bytes[i + 70] == (char)0x00) && (bytes[i + 71] == (char)0x00))
-                {
-                    int curChannel = 0;
-                    for(int offset = 2; offset < 66; offset += 8)
-                    {
-                        unsigned char chs[8] = {
-                                                (unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
-                                                (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
-                                                (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
-                                                (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]
-                                                };
-                        mBuf_[curChannel++] = turnBytes2uV(chs);
-                    }
-                    i += 39;
-                }
-            }
-        }
-    }
+    // void ShanxiDataSampler::sampleOnce()
+    // {
+    //     while(!client.hasPendingDatagrams());
+    //     char bytes[72];
+    //     int size = client.readDatagram(bytes, 72);
+    //     for(int i = 0; i < size; i++)
+    //     {
+    //         if((i < size - 1)
+    //                 && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
+    //         {
+    //             if((i < size - 71)
+    //                     && (bytes[i + 66] == (char)0x00) && (bytes[i + 67] == (char)0x00)
+    //                     && (bytes[i + 68] == (char)0x00) && (bytes[i + 69] == (char)0x00)
+    //                     && (bytes[i + 70] == (char)0x00) && (bytes[i + 71] == (char)0x00))
+    //             {
+    //                 int curChannel = 0;
+    //                 for(int offset = 2; offset < 66; offset += 8)
+    //                 {
+    //                     unsigned char chs[8] = {
+    //                                             (unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
+    //                                             (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
+    //                                             (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
+    //                                             (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]
+    //                                             };
+    //                     mBuf_[curChannel++] = turnBytes2uV(chs);
+    //                 }
+    //                 i += 39;
+    //             }
+    //         }
+    //     }
+    // }
 
-    double ShanxiDataSampler::turnBytes2uV(unsigned char *bytes)
-    {
-        int i, exponent;
-        unsigned int sign;
-        unsigned long long mantissa;
-        double curNum = 0.0;
-        std::string str = "";
-        sign = (bytes[7] & 0x80) >> 7;
-        exponent = (static_cast<unsigned int>(bytes[7] & 0x7f) << 4) + (static_cast<unsigned int>(bytes[6] & 0xf0) >> 4) - 1023;
-        mantissa = (static_cast<unsigned long long>(bytes[6] & 0x0f) << 48)
-                + (static_cast<unsigned long long>(bytes[5]) << 40)
-                + (static_cast<unsigned long long>(bytes[4]) << 32)
-                + (static_cast<unsigned long long>(bytes[3]) << 24)
-                + (static_cast<unsigned long long>(bytes[2]) << 16)
-                + (static_cast<unsigned long long>(bytes[1]) << 8)
-                + (static_cast<unsigned long long>(bytes[0]));
-        while(mantissa)
-        {
-            str += ('0' + mantissa % 2);
-            mantissa /= 2;
-        }
-        while(str.length() < 52)
-            str += '0';
-        str += '1';
-        if(exponent >= 0)
-        {
-            for(i = 0; i < (int)str.length(); i++)
-            {
-                if((int)i <= exponent)
-                    curNum += ((str[str.length() - i - 1] - '0') * pow(2, exponent - i));
-                else
-                    curNum += ((str[str.length() - i - 1] - '0') * (1.0 / pow(2, i - exponent)));
-            }
-        }
-        else
-        {
-            for(i = 0; i < -exponent - 1; i++)
-                str += '0';
-            for(i = 0; i < (int)str.length(); i++)
-                curNum += ((str[str.length() - i - 1] - '0') * pow(2, -i - 1));
-        }
-        curNum *= pow(-1, sign);
-        return curNum;
-    }
+    // double ShanxiDataSampler::turnBytes2uV(unsigned char *bytes)
+    // {
+    //     int i, exponent;
+    //     unsigned int sign;
+    //     unsigned long long mantissa;
+    //     double curNum = 0.0;
+    //     std::string str = "";
+    //     sign = (bytes[7] & 0x80) >> 7;
+    //     exponent = (static_cast<unsigned int>(bytes[7] & 0x7f) << 4) + (static_cast<unsigned int>(bytes[6] & 0xf0) >> 4) - 1023;
+    //     mantissa = (static_cast<unsigned long long>(bytes[6] & 0x0f) << 48)
+    //             + (static_cast<unsigned long long>(bytes[5]) << 40)
+    //             + (static_cast<unsigned long long>(bytes[4]) << 32)
+    //             + (static_cast<unsigned long long>(bytes[3]) << 24)
+    //             + (static_cast<unsigned long long>(bytes[2]) << 16)
+    //             + (static_cast<unsigned long long>(bytes[1]) << 8)
+    //             + (static_cast<unsigned long long>(bytes[0]));
+    //     while(mantissa)
+    //     {
+    //         str += ('0' + mantissa % 2);
+    //         mantissa /= 2;
+    //     }
+    //     while(str.length() < 52)
+    //         str += '0';
+    //     str += '1';
+    //     if(exponent >= 0)
+    //     {
+    //         for(i = 0; i < (int)str.length(); i++)
+    //         {
+    //             if((int)i <= exponent)
+    //                 curNum += ((str[str.length() - i - 1] - '0') * pow(2, exponent - i));
+    //             else
+    //                 curNum += ((str[str.length() - i - 1] - '0') * (1.0 / pow(2, i - exponent)));
+    //         }
+    //     }
+    //     else
+    //     {
+    //         for(i = 0; i < -exponent - 1; i++)
+    //             str += '0';
+    //         for(i = 0; i < (int)str.length(); i++)
+    //             curNum += ((str[str.length() - i - 1] - '0') * pow(2, -i - 1));
+    //     }
+    //     curNum *= pow(-1, sign);
+    //     return curNum;
+    // }
 
     UsbDataSampler::UsbDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)

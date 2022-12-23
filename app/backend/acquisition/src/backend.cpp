@@ -120,6 +120,8 @@ namespace eegneo
 
     void AcquisitionBackend::doSample()
     {
+        mDataSampler_->sampleOnce();
+        mDataSampler_->doRecordData();
         if (!mFiltCmd_.isFiltOn)
         {   
             if (!mSharedMemory_.lock()) return;
