@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include <Iir.h>
+#include "third/iir/include/Iir.h"
 
 namespace eegneo
 {
