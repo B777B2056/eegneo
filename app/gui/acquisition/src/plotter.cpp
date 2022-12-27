@@ -1,8 +1,8 @@
 #include "plotter.h"
 #include <QDateTime>
+#include "common/common.h"
 #include "utils/config.h"
-#include "utils/fft.h"
-#include <iostream>
+#include "third/fft/fft.h"
 
 #define POW2(x) ((x) * (x))
 
@@ -165,7 +165,7 @@ namespace eegneo
 
     FFTWavePlotter::FFTWavePlotter(std::size_t channelNum, std::size_t sampleRate)
         : WavePlotter()
-        , mFFTSize_(audiofft::AudioFFT::ComplexSize(eegneo::utils::FFTCalculator::fftsize()))
+        , mFFTSize_(audiofft::AudioFFT::ComplexSize(eegneo::utils::ConfigLoader::instance().get<std::size_t>("Acquisition", "FFTSize")))
         , mSampleRate_(sampleRate)
         , mChannelNum_(channelNum)
         , mFFTBuf_(channelNum * 2)
@@ -232,31 +232,30 @@ namespace eegneo
     TopographyPlotter::TopographyPlotter(QGraphicsView* view)
         : mView_(view)
         , mGraphicsScene_(new QGraphicsScene())
-        , mGraphicsPixmapItem_(new QGraphicsPixmapItem(QPixmap(":/images/resource/Images/eegtopo.jpg")))
+        , mGraphicsPixmapItem_(nullptr)
     {
-        mGraphicsScene_->setSceneRect(500, 500, 190, 190);  
-        mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
-        mGraphicsScene_->addItem(mGraphicsPixmapItem_);
+        // mGraphicsScene_->setSceneRect(-200, -200, 100, 100);  
+        // mGraphicsPixmapItem_->setPos(mGraphicsScene_->width()/2, mGraphicsScene_->height()/2);  
+        mGraphicsPixmapItem_ = mGraphicsScene_->addPixmap(QPixmap(":/images/resource/Images/eegtopo_init.png"));
         mView_->setScene(mGraphicsScene_);
     }
 
     TopographyPlotter::~TopographyPlotter()
     {
         delete mGraphicsScene_;
-        delete mGraphicsPixmapItem_;
     }
 
     void TopographyPlotter::showEvent()
     {
         QRectF bounds = mGraphicsScene_->itemsBoundingRect();
-        bounds.setWidth(bounds.width()*0.9);         
-        bounds.setHeight(bounds.height()*0.9);
+        bounds.setWidth(bounds.width()*1.1);         
+        bounds.setHeight(bounds.height()*1.1);
         mView_->fitInView(bounds, Qt::KeepAspectRatio);
         mView_->centerOn(mGraphicsPixmapItem_);
     }
 
     void TopographyPlotter::update()
     {
-        // TODO
+        mGraphicsPixmapItem_->setPixmap(QPixmap(TOPO_PIC_PATH));
     }
 }   // namespace eegneo

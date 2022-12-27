@@ -7,13 +7,11 @@
 #include <QString>
 #include <QUdpSocket>
 #include <QTimer>
+#include "file.h"
 #include "third/usb/libusb.h"
-#include "utils/file.h"
-
 namespace eegneo
 {
     namespace utils { class Filter; }
-
     class EEGDataSampler
     {
     public:
@@ -54,7 +52,7 @@ namespace eegneo
         int idx = 0;
         std::chrono::time_point<std::chrono::steady_clock> mLastTimePoint_;
         const char* TEST_DATA_FILE_PATH = "E:/jr/eegneo/test/data/S001R01.edf";
-        utils::EDFReader mEDFReader_;
+        EDFReader mEDFReader_;
     };
 
     class ShanghaiDataSampler : public EEGDataSampler

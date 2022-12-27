@@ -12,6 +12,9 @@
 #pragma execution_character_set("utf-8")
 #endif
 
+// constexpr const char* BACKEND_EXE_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
+constexpr const char* BACKEND_EXE_PATH = "E:/anaconda3/envs/qtcpp_env/eegneo_sampler.exe";
+
 namespace 
 {
     enum FileSaveState : std::uint8_t
@@ -129,7 +132,7 @@ void AcquisitionWindow::createMark(const QString& event)
 void AcquisitionWindow::startDataSampler()
 {
     QStringList args;
-    args << QString::number(mChannelNum_);
+    args << QString::number(mChannelNum_) << QString::number(mSampleRate_);
 
     QObject::connect(&mBackend_, &QProcess::started, [this]()->void
     {
@@ -202,6 +205,7 @@ void AcquisitionWindow::updateFFT()
 void AcquisitionWindow::updateTopography()
 {
     // TODO
+    mTopoPlotter_->update();
 }
 
 void AcquisitionWindow::saveToEDFFormatFile()

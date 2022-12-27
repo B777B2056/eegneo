@@ -7,7 +7,9 @@
 
 constexpr const char* DATA_CACHE_FILE_PATH = "temp_data.txt";    // 数据临时记录文件路径
 constexpr const char* EVENT_CACHE_FILE_PATH = "temp_event.txt";  // 事件临时记录文件路径
-constexpr const char* BACKEND_EXE_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
+
+#define TOPO_PIC_NAME "/app/resource/Images/eegtopo.png"
+#define TOPO_PIC_PATH  _CMAKE_SOURCE_DIR TOPO_PIC_NAME
 
 class QTcpSocket;
 

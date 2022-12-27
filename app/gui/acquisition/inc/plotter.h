@@ -10,6 +10,7 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
+#include <QImage>
 #include <QLineSeries>
 #include <QList>
 #include <QPointF>
@@ -121,6 +122,7 @@ namespace eegneo
         void update() override;
 
     private:
+        QImage mImg_;
         QGraphicsView* mView_;
         QGraphicsScene* mGraphicsScene_;
         QGraphicsPixmapItem* mGraphicsPixmapItem_;

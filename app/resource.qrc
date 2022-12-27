@@ -2,7 +2,8 @@
     <qresource prefix="/images">
         <file>resource/Images/eeg_10_20.png</file>
         <file>resource/Images/MainBackground.png</file>
-        <file>resource/Images/eegtopo.jpg</file>
+        <file>resource/Images/eegtopo.png</file>
+        <file>resource/Images/eegtopo_init.png</file>
     </qresource>
     <qresource prefix="/erp/p300">
         <file>resource/p300/oddball/2.bmp</file>

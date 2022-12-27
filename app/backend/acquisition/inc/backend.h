@@ -1,27 +1,31 @@
 #pragma once
-#include <fstream>
 #include <QSharedMemory>
+#include "threadpool.h"
 #include "common/common.h"
-#include "utils/ipc.h"
 
 namespace eegneo
 {
     class EEGDataSampler;
-    namespace utils { class Filter; class FFTCalculator; }
+    class TopoPlot;
+    class Filter; 
+    class FFTCalculator;
+    namespace utils { class IpcClient; }
 
     class AcquisitionBackend
     {
     public:
-        AcquisitionBackend(std::size_t channelNum);
+        AcquisitionBackend(std::size_t channelNum, std::size_t sampleFreqHz);
         AcquisitionBackend(const AcquisitionBackend&) = delete;
         AcquisitionBackend& operator=(const AcquisitionBackend&) = delete;
         AcquisitionBackend(AcquisitionBackend&&) = default;
         AcquisitionBackend& operator=(AcquisitionBackend&&) = default;
         virtual ~AcquisitionBackend();
 
-        void run();
+        void doTaskInMainThread();
 
     private:
+        std::atomic<bool> mIsStop_, mIsOnceSampleDone_;
+        ThreadPool mThreadPool_;
         utils::IpcClient* mIpcWrapper_;
 
         EEGDataSampler* mDataSampler_;
@@ -31,17 +35,21 @@ namespace eegneo
 
         FiltCmd mFiltCmd_;
 
-        utils::Filter* mFilter_; 
+        Filter* mFilter_; 
         double* mFiltBuf_;
 
-        utils::FFTCalculator* mFFT_;
+        FFTCalculator* mFFT_;
+
+        TopoPlot* mTopoPlot_;
 
         void initIpc();
         void initSharedMemory();
+        void initTaskThreads();
 
         void doSample();
         void doFilt();
         void doFFT();
+        void doTopoPlot();
 
         void handleRecordCmd(RecordCmd* cmd);
         void handleFiltCmd(FiltCmd* cmd);

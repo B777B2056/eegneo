@@ -1,11 +1,12 @@
 #include "backend.h"
+#include <chrono>
 #include "sampler.h"
+#include "eegtopo.h"
+#include "filter.h"
+#include "fft.h"
+#include "file.h"
 #include "utils/config.h"
-#include "utils/filter.h"
-#include "utils/fft.h"
-#include "utils/file.h"
-
-#define BUF_BYTES_LEN (this->mChannelNum_ * sizeof(double))
+#include "utils/ipc.h"
 
 #define InitIpcServer(CMDType)   \
     do  \
@@ -17,28 +18,32 @@
     }   \
     while (0)
 
-// static std::fstream debug_file{"E:/jr/eegneo/debug.txt", std::ios::out};
-
 namespace eegneo
 {
-    AcquisitionBackend::AcquisitionBackend(std::size_t channelNum)
-        : mIpcWrapper_(nullptr)
+    AcquisitionBackend::AcquisitionBackend(std::size_t channelNum, std::size_t sampleFreqHz)
+        : mIsStop_(false), mIsOnceSampleDone_(false), mThreadPool_(3)
+        , mIpcWrapper_(nullptr)
         , mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum)
-        , mSharedMemory_{"Sampler"}
-        , mFilter_(new utils::Filter[channelNum]), mFiltBuf_(new double[channelNum])
-        , mFFT_(new utils::FFTCalculator[channelNum])
+        , mSharedMemory_("Sampler")
+        , mFilter_(new Filter[channelNum]), mFiltBuf_(new double[channelNum])
+        , mFFT_(new FFTCalculator[channelNum])
+        , mTopoPlot_(new TopoPlot(static_cast<double>(sampleFreqHz), channelNum))
     {
         this->initSharedMemory();
         this->initIpc();
+        this->initTaskThreads();
     }
 
     AcquisitionBackend::~AcquisitionBackend()
     {
+        this->mIsStop_.store(true);
+        this->mIsOnceSampleDone_.store(false);
         delete mIpcWrapper_;
         delete[] mFiltBuf_;
         delete[] mFilter_;
         delete[] mFFT_;
+        delete mTopoPlot_;
         delete mDataSampler_;
     }
 
@@ -62,11 +67,39 @@ namespace eegneo
         }
     }
 
-    void AcquisitionBackend::run()
+    void AcquisitionBackend::initTaskThreads()
     {
-        this->doSample(); 
-        this->doFilt();
-        this->doFFT(); 
+        this->mThreadPool_.submitTask([this]()->void
+        {
+            while (!this->mIsStop_.load())
+            {
+                this->mIsOnceSampleDone_.store(false);
+                this->doSample(); 
+                this->mIsOnceSampleDone_.store(true);
+            }
+        });
+        this->mThreadPool_.submitTask([this]()->void
+        {
+            while (!this->mIsStop_.load())
+            {
+                if (this->mIsOnceSampleDone_.load())
+                {
+                    this->doFilt();
+                    this->doFFT();
+                    // 降低cpu使用率
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(50ms);
+                }
+            }
+        });
+    }
+
+    void AcquisitionBackend::doTaskInMainThread()
+    {
+        if (this->mIsOnceSampleDone_.load())
+        {
+            this->doTopoPlot();
+        }
     }
 
     void AcquisitionBackend::handleRecordCmd(RecordCmd* cmd)
@@ -105,7 +138,7 @@ namespace eegneo
         auto& config = eegneo::utils::ConfigLoader::instance();
         auto names = config.get<std::vector<std::string>>("Acquisition", "Electrodes");
 
-        eegneo::utils::EDFWritter writter{cmd->filePath, cmd->channelNum, cmd->fileType};
+        eegneo::EDFWritter writter{cmd->filePath, cmd->channelNum, cmd->fileType};
         writter.setSampleFreqencyHz(cmd->sampleRate);
 
         for (std::size_t i = 0; i < cmd->channelNum; ++i)
@@ -125,7 +158,7 @@ namespace eegneo
         if (!mFiltCmd_.isFiltOn)
         {   
             if (!mSharedMemory_.lock()) return;
-            ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), BUF_BYTES_LEN);
+            ::memcpy(mSharedMemory_.data(), mDataSampler_->data(), (this->mChannelNum_ * sizeof(double)));
             mSharedMemory_.unlock();
         }
     }
@@ -158,7 +191,7 @@ namespace eegneo
         }
 
         if (!mSharedMemory_.lock()) return;
-        ::memcpy(mSharedMemory_.data(), mFiltBuf_, BUF_BYTES_LEN);
+        ::memcpy(mSharedMemory_.data(), mFiltBuf_, (this->mChannelNum_ * sizeof(double)));
         mSharedMemory_.unlock();
     }
 
@@ -170,7 +203,7 @@ namespace eegneo
             mFFT_[i].doFFT();
         }
 
-        void* pos = (void*)((char*)mSharedMemory_.data() + BUF_BYTES_LEN);
+        void* pos = (void*)((char*)mSharedMemory_.data() + (this->mChannelNum_ * sizeof(double)));
 
         if (!mSharedMemory_.lock()) return;
 
@@ -185,5 +218,11 @@ namespace eegneo
         }
 
         mSharedMemory_.unlock();
+    }
+
+    void AcquisitionBackend::doTopoPlot()
+    {
+        mTopoPlot_->appendNewData(mDataSampler_->data());
+        mTopoPlot_->plotAndSaveFigure();
     }
 }   // namespace eegneo

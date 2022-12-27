@@ -1,11 +1,9 @@
 {
     "IpcServerIpPort":8888,
     "Acquisition":{
+        "FFTSize":64,
         "Electrodes":[
-            "default_1","default_2","default_3","default_4","default_5","default_6","default_7","default_8",
-            "default_9","default_10","default_11","default_12","default_13","default_14","default_15","default_16",
-            "default_17","default_18","default_19","default_20","default_21","default_22","default_23","default_24",
-            "default_25","default_26","default_27","default_28","default_29","default_30","default_31","default_32"
+            "Fz", "FC3", "FC1", "FCz", "FC2", "FC4", "C5", "C3"
         ]
     },
     "ERP":{
