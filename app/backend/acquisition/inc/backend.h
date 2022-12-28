@@ -56,6 +56,5 @@ namespace eegneo
         void handleShutdownCmd(ShutdownCmd* cmd);
         void handleMarkerCmd(MarkerCmd* cmd);
         void handleFileSaveCmd(FileSaveCmd* cmd);
-        void handleErrorCmd(ErrorCmd* cmd);
     };
 }   // namespace eegneo

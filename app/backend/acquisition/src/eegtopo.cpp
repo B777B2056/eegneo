@@ -8,6 +8,16 @@
 
 namespace eegneo
 {
+    void TopoPlot::PyErrorWrapper::init()
+    {
+        ::PyErr_Fetch(&this->type, &this->value, &this->traceback);
+    }
+
+    void TopoPlot::PyErrorWrapper::setErrorMsg()
+    {
+        this->errorMsg = ::PyUnicode_AsUTF8(::PyObject_Str(this->value));
+    }
+
     TopoPlot::TopoPlot(double sampleFreqHz, std::size_t channelNum)
         : mSampleFreqHz_(sampleFreqHz)
         , mChannelNum_(channelNum)
@@ -16,14 +26,15 @@ namespace eegneo
     {
         ::Py_SetPythonHome(L"" _Python3_ROOT_DIR);
         ::Py_Initialize();
+        this->mPyError_.init();
         if (!::Py_IsInitialized())
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
         if (this->mBufPyList_ = ::PyList_New(channelNum); !this->mBufPyList_)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
         this->constructPyInstance();
@@ -56,7 +67,7 @@ namespace eegneo
         PyObject* pPyList = ::PyList_New(this->mChannelNum_);
         if (!pPyList)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return nullptr;
         }
 
@@ -70,7 +81,7 @@ namespace eegneo
         PyObject* pArgs = ::PyTuple_New(3);
         if (!pArgs)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return nullptr;
         }
         ::PyTuple_SetItem(pArgs, 0, ::Py_BuildValue("d", this->mSampleFreqHz_));
@@ -90,32 +101,32 @@ namespace eegneo
         PyObject* pModule = ::PyImport_ImportModule("topography");  
         if (!pModule)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             ::PyErr_Print();
             return;
         }
         PyObject* pDict = ::PyModule_GetDict(pModule); 
         if (!pDict)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
         PyObject* pClass = ::PyDict_GetItemString(pDict, "TopoPlot");
         if (!pClass)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
         PyObject* pCtor = ::PyInstanceMethod_New(pClass);
         if (!pCtor)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
         this->mPyInstancePtr_ = ::PyObject_CallObject(pCtor, this->buildCtorArgs());
         if (!this->mPyInstancePtr_)
         {
-            // Error
+            this->mPyError_.setErrorMsg();
             return;
         }
     }

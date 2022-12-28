@@ -18,10 +18,12 @@
     }   \
     while (0)
 
+#define SUB_THREAD_TASK_NUM 3
+
 namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum, std::size_t sampleFreqHz)
-        : mIsStop_(false), mIsOnceSampleDone_(false), mThreadPool_(3)
+        : mIsStop_(false), mIsOnceSampleDone_(false), mThreadPool_(SUB_THREAD_TASK_NUM)
         , mIpcWrapper_(nullptr)
         , mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum)
@@ -33,6 +35,13 @@ namespace eegneo
         this->initSharedMemory();
         this->initIpc();
         this->initTaskThreads();
+
+        // if (const auto& pyerrmsg = this->mTopoPlot_->error(); !pyerrmsg.empty())
+        // {
+        //     ErrorCmd cmd;
+        //     ::memcpy(cmd.errmsg, pyerrmsg.c_str(), pyerrmsg.size());
+        //     this->mIpcWrapper_->sendCmd(cmd);
+        // }
     }
 
     AcquisitionBackend::~AcquisitionBackend()
@@ -53,7 +62,7 @@ namespace eegneo
         auto port = config.get<std::uint16_t>("IpcServerIpPort");
         mIpcWrapper_ = new eegneo::utils::IpcClient(SessionId::AccquisitionInnerSession, "127.0.0.1", port);
         InitIpcServer(Record); InitIpcServer(Filt); InitIpcServer(Shutdown); 
-        InitIpcServer(Marker); InitIpcServer(FileSave); InitIpcServer(Error);
+        InitIpcServer(Marker); InitIpcServer(FileSave);
     }
 
     void AcquisitionBackend::initSharedMemory()
@@ -150,11 +159,6 @@ namespace eegneo
         writter.saveRecordData();
         writter.saveAnnotation();
         this->mIpcWrapper_->sendCmd(FileSavedFinishedCmd{});
-    }
-
-    void AcquisitionBackend::handleErrorCmd(ErrorCmd* cmd)
-    {
-
     }
 
     void AcquisitionBackend::doSample()

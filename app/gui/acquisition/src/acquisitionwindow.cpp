@@ -21,7 +21,7 @@ namespace
         FILE_SAVE_FINISHED
     };
 
-    constexpr std::uint16_t GRAPH_FRESH = 100;   // 触发波形显示定时器的时间，单位为ms
+    constexpr std::uint16_t GRAPH_FRESH = 50;   // 触发波形显示定时器的时间，单位为ms
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
@@ -40,6 +40,7 @@ AcquisitionWindow::AcquisitionWindow(QWidget *parent)
 
 AcquisitionWindow::~AcquisitionWindow()
 {
+    mPlotTimer_->stop();
     delete mIpcWrapper_;
     delete mPlotTimer_;
     delete mSharedMemory_;
