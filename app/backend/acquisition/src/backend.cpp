@@ -52,7 +52,8 @@ namespace eegneo
         auto& config = eegneo::utils::ConfigLoader::instance();
         auto port = config.get<std::uint16_t>("IpcServerIpPort");
         mIpcWrapper_ = new eegneo::utils::IpcClient(SessionId::AccquisitionInnerSession, "127.0.0.1", port);
-        InitIpcServer(Record); InitIpcServer(Filt); InitIpcServer(Shutdown); InitIpcServer(Marker); InitIpcServer(FileSave);
+        InitIpcServer(Record); InitIpcServer(Filt); InitIpcServer(Shutdown); 
+        InitIpcServer(Marker); InitIpcServer(FileSave); InitIpcServer(Error);
     }
 
     void AcquisitionBackend::initSharedMemory()
@@ -149,6 +150,11 @@ namespace eegneo
         writter.saveRecordData();
         writter.saveAnnotation();
         this->mIpcWrapper_->sendCmd(FileSavedFinishedCmd{});
+    }
+
+    void AcquisitionBackend::handleErrorCmd(ErrorCmd* cmd)
+    {
+
     }
 
     void AcquisitionBackend::doSample()

@@ -27,4 +27,3 @@ class TopoPlot:
         plt.savefig(self.path)
         plt.cla()
         plt.close('all')
-        

@@ -5,11 +5,8 @@
 #include <type_traits>
 #include <unordered_map>
 
-constexpr const char* DATA_CACHE_FILE_PATH = "temp_data.txt";    // 数据临时记录文件路径
-constexpr const char* EVENT_CACHE_FILE_PATH = "temp_event.txt";  // 事件临时记录文件路径
-
-#define TOPO_PIC_NAME "/app/resource/Images/eegtopo.png"
-#define TOPO_PIC_PATH  _CMAKE_SOURCE_DIR TOPO_PIC_NAME
+constexpr const char* DATA_CACHE_FILE_PATH = "data.temp";    // 数据临时记录文件路径
+constexpr const char* EVENT_CACHE_FILE_PATH = "event.temp";  // 事件临时记录文件路径
 
 class QTcpSocket;
 
@@ -34,7 +31,8 @@ namespace eegneo
         Shutdown,
         Marker,
         FileSave,
-        FileSavedFinished
+        FileSavedFinished,
+        Error
     };
 
     enum EDFFileType
@@ -88,6 +86,11 @@ namespace eegneo
 
     };
 
+    struct ErrorCmd
+    {
+        char errmsg[1024] = {'\0'};
+    };
+
 #pragma pack(pop)
     namespace detail
     {
@@ -119,6 +122,10 @@ namespace eegneo
             else if constexpr (std::is_same_v<Cmd, FileSavedFinishedCmd>)
             {
                 return CmdId::FileSavedFinished;
+            }
+            else if constexpr (std::is_same_v<Cmd, ErrorCmd>)
+            {
+                return CmdId::Error;
             }
             else
             {

@@ -1,35 +1,29 @@
 #include "eegtopo.h"
 #include <cstdint>
-#include <filesystem>
-#include <stdexcept>
 #include "common/common.h"
 #include "utils/config.h"
 
 #define PY_SSIZE_T_CLEAN
-#include "Python.h"
+#include <Python.h>
 
 namespace eegneo
 {
-    constexpr const wchar_t* PYTHON_INTERRUPT_PATH = L"E:/anaconda3/envs/qtcpp_env";
-
     TopoPlot::TopoPlot(double sampleFreqHz, std::size_t channelNum)
         : mSampleFreqHz_(sampleFreqHz)
         , mChannelNum_(channelNum)
         , mBufPyList_(nullptr)
         , mPyInstancePtr_(nullptr)
     {
-        ::Py_SetPythonHome(PYTHON_INTERRUPT_PATH);
+        ::Py_SetPythonHome(L"" _Python3_ROOT_DIR);
         ::Py_Initialize();
         if (!::Py_IsInitialized())
         {
             // Error
-            throw std::runtime_error{"Py_Initialize"};
             return;
         }
         if (this->mBufPyList_ = ::PyList_New(channelNum); !this->mBufPyList_)
         {
             // Error
-            throw std::runtime_error{"PyList_New"};
             return;
         }
         this->constructPyInstance();
@@ -43,6 +37,7 @@ namespace eegneo
 
     void TopoPlot::appendNewData(const double* data)
     {
+        if (!this->mPyInstancePtr_) return;
         for (std::size_t i = 0; i < this->mChannelNum_; ++i)
         {
             ::PyList_SetItem(this->mBufPyList_, i, ::Py_BuildValue("d", data[i]));
@@ -52,6 +47,7 @@ namespace eegneo
 
     void TopoPlot::plotAndSaveFigure()
     {        
+        if (!this->mPyInstancePtr_) return;
         ::PyObject_CallMethodNoArgs(this->mPyInstancePtr_, ::Py_BuildValue("s", "plot"));
     }
 
@@ -61,7 +57,6 @@ namespace eegneo
         if (!pPyList)
         {
             // Error
-            throw std::runtime_error{"PyList_New ARGS"};
             return nullptr;
         }
 
@@ -76,53 +71,58 @@ namespace eegneo
         if (!pArgs)
         {
             // Error
-            throw std::runtime_error{"PyTuple_New ARGS"};
             return nullptr;
         }
         ::PyTuple_SetItem(pArgs, 0, ::Py_BuildValue("d", this->mSampleFreqHz_));
         ::PyTuple_SetItem(pArgs, 1, pPyList);
-        ::PyTuple_SetItem(pArgs, 2, ::Py_BuildValue("s", TOPO_PIC_PATH));
+        ::PyTuple_SetItem(pArgs, 2, ::Py_BuildValue("s", _TOPO_PIC_PATH));
         return pArgs;
     }
 
+#define PY_SYS_APPEND_CMD_HEAD "sys.path.append(\""
+#define PY_SYS_APPEND_CMD_TAIL "\")\n"
+#define PY_SYS_APPEND_CMD_TOPOPLOT PY_SYS_APPEND_CMD_HEAD _PYSCRIPT_MODULE_PATH PY_SYS_APPEND_CMD_TAIL
+
     void TopoPlot::constructPyInstance()
     {
+        ::PyRun_SimpleString("import sys\n");
+        ::PyRun_SimpleString(PY_SYS_APPEND_CMD_TOPOPLOT);
         PyObject* pModule = ::PyImport_ImportModule("topography");  
         if (!pModule)
         {
             // Error
-            throw std::runtime_error{"PyImport_ImportModule"};
+            ::PyErr_Print();
             return;
         }
         PyObject* pDict = ::PyModule_GetDict(pModule); 
         if (!pDict)
         {
             // Error
-            throw std::runtime_error{"PyModule_GetDict"};
             return;
         }
         PyObject* pClass = ::PyDict_GetItemString(pDict, "TopoPlot");
         if (!pClass)
         {
             // Error
-            throw std::runtime_error{"PyDict_GetItemString"};
             return;
         }
         PyObject* pCtor = ::PyInstanceMethod_New(pClass);
         if (!pCtor)
         {
             // Error
-            throw std::runtime_error{"PyInstanceMethod_New"};
             return;
         }
         this->mPyInstancePtr_ = ::PyObject_CallObject(pCtor, this->buildCtorArgs());
         if (!this->mPyInstancePtr_)
         {
             // Error
-            throw std::runtime_error{"PyObject_CallObject"};
             return;
         }
     }
+
+#undef PY_SYS_APPEND_CMD_HEAD
+#undef PY_SYS_APPEND_CMD_TAIL
+#undef PY_SYS_APPEND_CMD_TOPOPLOT
 
     void TopoPlot::destroyPyInstance()
     {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(eegneo_erp VERSION 0.9.0 LANGUAGES CXX)
+project(eegneo_erp)
 
 set(CMAKE_AUTOUIC_SEARCH_PATHS "ui")
 
@@ -11,5 +11,5 @@ file(GLOB HEADERS "inc/*.h")
 file(GLOB SOURCES "src/*.cpp" "../../utils/ipc.cpp" "../../utils/config.cpp")
 file(GLOB UI "ui/*.ui")
 
-qt_add_executable(eegneo_erp "../../resource.qrc" ${HEADERS} ${UI} ${SOURCES})
-target_link_libraries(eegneo_erp PRIVATE Qt6::Core Qt6::Widgets Qt6::Network)
+qt_add_executable(${PROJECT_NAME} "../../resource.qrc" ${HEADERS} ${UI} ${SOURCES})
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets Qt6::Network)

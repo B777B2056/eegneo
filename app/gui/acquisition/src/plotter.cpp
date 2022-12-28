@@ -1,5 +1,6 @@
 #include "plotter.h"
 #include <QDateTime>
+#include <QFileInfo>
 #include "common/common.h"
 #include "utils/config.h"
 #include "third/fft/fft.h"
@@ -254,8 +255,14 @@ namespace eegneo
         mView_->centerOn(mGraphicsPixmapItem_);
     }
 
+    static bool IsImageExist()
+    {
+        return QFileInfo{_TOPO_PIC_PATH}.isFile();
+    }
+
     void TopographyPlotter::update()
     {
-        mGraphicsPixmapItem_->setPixmap(QPixmap(TOPO_PIC_PATH));
+        if (!IsImageExist())    return;
+        mGraphicsPixmapItem_->setPixmap(QPixmap(_TOPO_PIC_PATH));
     }
 }   // namespace eegneo

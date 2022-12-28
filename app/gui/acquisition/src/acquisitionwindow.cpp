@@ -12,9 +12,6 @@
 #pragma execution_character_set("utf-8")
 #endif
 
-// constexpr const char* BACKEND_EXE_PATH = "E:/jr/eegneo/build/app/backend/acquisition/Debug/eegneo_sampler.exe"; // 采样窗口后端进程路径
-constexpr const char* BACKEND_EXE_PATH = "E:/anaconda3/envs/qtcpp_env/eegneo_sampler.exe";
-
 namespace 
 {
     enum FileSaveState : std::uint8_t
@@ -24,7 +21,7 @@ namespace
         FILE_SAVE_FINISHED
     };
 
-    constexpr std::uint16_t GRAPH_FRESH = 50;   // 触发波形显示定时器的时间，单位为ms
+    constexpr std::uint16_t GRAPH_FRESH = 100;   // 触发波形显示定时器的时间，单位为ms
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
@@ -79,9 +76,19 @@ void AcquisitionWindow::initIPCSvr()
         QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
     });
 
+    mIpcWrapper_->setCmdHandler<eegneo::ErrorCmd>(eegneo::SessionId::AccquisitionInnerSession, [this](eegneo::ErrorCmd* cmd)->void
+    {
+        QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
+    });
+
     mIpcWrapper_->setCmdHandler<eegneo::MarkerCmd>(eegneo::SessionId::ERPSession, [this](eegneo::MarkerCmd* cmd)->void
     {
         this->createMark(cmd->msg);
+    });
+
+    mIpcWrapper_->setCmdHandler<eegneo::ErrorCmd>(eegneo::SessionId::ERPSession, [this](eegneo::ErrorCmd* cmd)->void
+    {
+        QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
     });
 }
 
@@ -140,7 +147,7 @@ void AcquisitionWindow::startDataSampler()
         while (!mSharedMemory_->attach());
     });
 
-    mBackend_.start(BACKEND_EXE_PATH, args);
+    mBackend_.start(_BACKEND_EXE_PATH, args);
 }
 
 void AcquisitionWindow::stopDataSampler()

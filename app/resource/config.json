@@ -8,8 +8,8 @@
     },
     "ERP":{
         "AcquisitionIpAddr":"127.0.0.1",
-        "ImagesInPracticeTotalCount":1,
-        "ImagesInExperimentTotalCount":10,
+        "ImagesInPracticeTotalCount":20,
+        "ImagesInExperimentTotalCount":200,
         "StimulusImageRatio":0.2,
         "CrossDurationMs":800,
         "ImageDurationMs":50,
