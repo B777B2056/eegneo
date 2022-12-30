@@ -1,5 +1,6 @@
 ﻿#include "acquisitionwindow.h"
 #include "ui_acquisitionwindow.h"
+#include <cstdlib>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QDateTime>
@@ -21,13 +22,13 @@ namespace
         FILE_SAVE_FINISHED
     };
 
-    constexpr std::uint16_t GRAPH_FRESH = 50;   // 触发波形显示定时器的时间，单位为ms
+    constexpr std::uint16_t GRAPH_FRESH_FREQ = 50;   // 触发波形显示定时器的时间，单位为ms
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
     : QMainWindow(parent)
     , mSampleRate_(0), mChannelNum_(0)
-    , mPlotTimer_(new QTimer(this))
+    , mPlotTimer_(new QTimer())
     , mIpcWrapper_(nullptr)
     , mFileSaveFinishedFlag_(FILE_SAVE_NOT_START)
     , ui(new Ui::AcquisitionWindow)
@@ -68,28 +69,35 @@ void AcquisitionWindow::initIPCSvr()
 {
     auto& config = eegneo::utils::ConfigLoader::instance();
     auto port = config.get<std::uint16_t>("IpcServerIpPort");
-
     mIpcWrapper_ = new eegneo::utils::IpcService(port);
     
-    mIpcWrapper_->setCmdHandler<eegneo::FileSavedFinishedCmd>(eegneo::SessionId::AccquisitionInnerSession, [this](eegneo::FileSavedFinishedCmd* cmd)->void
+    mIpcWrapper_->setSessionHandler(eegneo::SessionId::AccquisitionInnerSession, 
+    [this](eegneo::utils::IpcClient* channel)->void
     {
-        this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
-        QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
+        channel->setCmdHandler<eegneo::FileSavedFinishedCmd>([this](eegneo::FileSavedFinishedCmd* cmd)->void
+        {
+            this->mFileSaveFinishedFlag_ = FILE_SAVE_FINISHED;
+            QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
+        });
+
+        channel->setCmdHandler<eegneo::ErrorCmd>([this](eegneo::ErrorCmd* cmd)->void
+        {
+            QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
+        });
     });
 
-    mIpcWrapper_->setCmdHandler<eegneo::ErrorCmd>(eegneo::SessionId::AccquisitionInnerSession, [this](eegneo::ErrorCmd* cmd)->void
+    mIpcWrapper_->setSessionHandler(eegneo::SessionId::ERPSession,
+    [this](eegneo::utils::IpcClient* channel)->void
     {
-        QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
-    });
-
-    mIpcWrapper_->setCmdHandler<eegneo::MarkerCmd>(eegneo::SessionId::ERPSession, [this](eegneo::MarkerCmd* cmd)->void
-    {
-        this->createMark(cmd->msg);
-    });
-
-    mIpcWrapper_->setCmdHandler<eegneo::ErrorCmd>(eegneo::SessionId::ERPSession, [this](eegneo::ErrorCmd* cmd)->void
-    {
-        QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
+        channel->setCmdHandler<eegneo::MarkerCmd>([this](eegneo::MarkerCmd* cmd)->void
+        {
+            this->createMark(cmd->msg);
+        });
+        
+        channel->setCmdHandler<eegneo::ErrorCmd>([this](eegneo::ErrorCmd* cmd)->void
+        {
+            QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
+        });
     });
 }
 
@@ -97,33 +105,33 @@ void AcquisitionWindow::show()
 {
     // 待用户输入基本信息
     SetInfo siw;
+USER_INPUT:
     if(int rec = siw.exec(); QDialog::Accepted == rec)
-    {
+    {   
+        if (!siw.isValid())
+        {
+            QMessageBox::critical(this, tr("错误"), "参数设置错误", QMessageBox::Ok);
+            goto USER_INPUT;
+        }
         this->mChannelNum_ = siw.channelNum();
-        this->mFiltCmd_.sampleRate = this->mSampleRate_ = siw.sampleRate();
+        this->mSampleRate_ = siw.sampleRate();
         this->mFileName_ = siw.subjectNum() + "_" + QDateTime::currentDateTime().toString("yyyy_MM_dd_hh_mm_ss");
 
         this->startDataSampler();
         this->initSignalChart();
         this->initFFTChart();
 
-        QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void
-        { 
-            this->updateEEG(); 
-            this->updateFFT(); 
-            this->updateTopography();
-        });
-        this->mPlotTimer_->start(GRAPH_FRESH);
+        this->mPlotTimer_->start(GRAPH_FRESH_FREQ);
 
         QMainWindow::show();
     }
     else
     {
-        emit closeAll();
+        this->close();
+        std::exit(0);
     }
 }
 
-// 发送marker
 void AcquisitionWindow::createMark(const QString& event)
 {
     if(event.isNull() || event.isEmpty()) return;
@@ -164,7 +172,7 @@ void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mSignalPlotter_->setAx
 void AcquisitionWindow::initSignalChart()
 {
     this->mSignalBuf_ = new double[this->mChannelNum_];
-    this->mSignalPlotter_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH, mSignalBuf_);
+    this->mSignalPlotter_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH_FREQ, mSignalBuf_);
 
     ui->graphicsView->setChart(this->mSignalPlotter_->chart());                                   
     this->mSignalPlotter_->setAxisXScale(eegneo::Second::FIVE);
@@ -212,7 +220,6 @@ void AcquisitionWindow::updateFFT()
 
 void AcquisitionWindow::updateTopography()
 {
-    // TODO
     mTopoPlotter_->update();
 }
 
@@ -245,9 +252,17 @@ void AcquisitionWindow::saveToBDFFormatFile()
 // 信号与槽的链接
 void AcquisitionWindow::connectSignalAndSlot()
 {
+    QObject::connect(mPlotTimer_, &QTimer::timeout, [this]()->void
+    { 
+        this->updateEEG(); 
+        this->updateFFT(); 
+        this->updateTopography();
+    });
+
     QObject::connect(ui->filter, &QPushButton::clicked, [this]()->void
     { 
         bool isFilt = ((!mFiltCmd_.isFiltOn) && mFiltCmd_.isValid());
+        mFiltCmd_.sampleRate = this->mSampleRate_;
         mFiltCmd_.isFiltOn = isFilt;  
         mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(mFiltCmd_);    
         ui->label_5->setText(isFilt ? "On" : "Off"); 
@@ -265,8 +280,7 @@ void AcquisitionWindow::connectSignalAndSlot()
             if (reply == QMessageBox::Ok)
             {
                 this->stopDataSampler();
-                this->hide();
-                emit closeAll();
+                this->close();
             }
         }
     });

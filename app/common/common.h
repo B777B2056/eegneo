@@ -47,6 +47,11 @@ namespace eegneo
         CmdId cid = CmdId::Invalid;
     };
 
+    struct InitCmd
+    {
+
+    };
+
     struct RecordCmd
     {
         bool isRecordOn = false;
@@ -94,12 +99,14 @@ namespace eegneo
 #pragma pack(pop)
     namespace detail
     {
-        using CmdCallBackMap = std::unordered_map<CmdId, std::function<void(QTcpSocket*)>>;
-
         template<typename Cmd>
         constexpr CmdId CmdTypeMapToCmdId()
         {
-            if constexpr (std::is_same_v<Cmd, RecordCmd>)
+            if constexpr (std::is_same_v<Cmd, InitCmd>)
+            {
+                return CmdId::Init;
+            }
+            else if constexpr (std::is_same_v<Cmd, RecordCmd>)
             {
                 return CmdId::Record;
             }

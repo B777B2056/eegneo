@@ -1,25 +1,35 @@
 #pragma once
+#include <deque>
+#include <vector>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QTimer>
 #include "common/common.h"
 
 namespace eegneo
 {
     namespace utils
     {
-        class IpcService;
-
         class IpcClient
         {
-            friend class IpcService;
+        public:
+            using ConnectedCallback = std::function<void()>;
+            using ErrorCallback = std::function<void(QAbstractSocket::SocketError)>;
+
+            template<typename Cmd> 
+            using CmdHandler = std::function<void(Cmd*)>;
+
         public:
             IpcClient(SessionId sid, const char* svrAddr, std::uint16_t svrPort);
-            IpcClient(IpcClient&& rhs);
-            IpcClient& operator=(IpcClient&& rhs);
+            IpcClient(QTcpSocket* channel);
             ~IpcClient();
 
+            SessionId sessionId() const { return this->mSid_; }; 
+            void setConnectedCallback(ConnectedCallback cb) { this->mConnectedCallback_ = cb; }
+            void setErrorCallback(ErrorCallback cb) { this->mErrorCallback_ = cb; }
+
             template<typename Cmd>
-            void setCmdHandler(std::function<void(Cmd*)> handler)
+            void setCmdHandler(CmdHandler<Cmd> handler)
             {
                 this->mHandlers_[detail::CmdTypeMapToCmdId<Cmd>()] = [handler](QTcpSocket* channel)->void
                 {
@@ -33,58 +43,49 @@ namespace eegneo
             template<typename Cmd>
             void sendCmd(const Cmd& cmd)
             {
-                CmdHeader hdr; 
-                hdr.sid = this->mSid_;
-                hdr.cid = detail::CmdTypeMapToCmdId<Cmd>();
-                constexpr std::int64_t len = sizeof(hdr) + sizeof(cmd);
-                char buf[len] = {0};
-                ::memcpy(buf, (char*)&hdr, sizeof(hdr));
-                ::memcpy(buf + sizeof(hdr), (char*)&cmd, sizeof(cmd));
-                std::int64_t bytesTransferred = 0;
-                do
-                {
-                    std::int64_t t = mChannel_->write(buf + bytesTransferred, len - bytesTransferred);
-                    if (!t) break;
-                    bytesTransferred += t;
-                } while (bytesTransferred < len);
-                // mChannel_->waitForBytesWritten();
-                mChannel_->flush();
+                CmdHeader hdr{this->mSid_, detail::CmdTypeMapToCmdId<Cmd>()}; 
+
+                std::vector<char> buf;
+                buf.insert(buf.begin(), (char*)&hdr, (char*)&hdr + sizeof(hdr));
+                buf.insert(buf.end(), (char*)&cmd, (char*)&cmd + sizeof(cmd));
+
+                if (CmdId::Init == hdr.cid) this->mWriteQueue_.push_front(buf);
+                else    this->mWriteQueue_.push_back(buf);
             }
+
+        private:
+            using CmdHandlerWrapper = std::function<void(QTcpSocket*)>;
 
         private:
             SessionId mSid_;
             QTcpSocket* mChannel_;
-            detail::CmdCallBackMap mHandlers_;
+            std::unordered_map<CmdId, CmdHandlerWrapper> mHandlers_;
+            QTimer* mEventLoopHook_;
+            std::deque<std::vector<char>> mWriteQueue_;
+            ConnectedCallback mConnectedCallback_;
+            ErrorCallback mErrorCallback_;
 
-            IpcClient();
-            IpcClient(QTcpSocket* channel);
-            void sendIdentifyInfo();
-            void handleMsg();
+            void handleRead();
+            void handleWrite();
             static bool ReadBytes(QTcpSocket* channel, char* buf, std::uint16_t bytesLength);
         };
 
         class IpcService
         {
         public:
+            using SessionHandler = std::function<void(IpcClient*)>;
+
+        public:
             IpcService(std::uint16_t svrPort);
             ~IpcService();
 
+            void setSessionHandler(SessionId sid, SessionHandler handler) { this->mSessionHandlers_[sid] = handler; }
             IpcClient* session(SessionId sid) { return this->mSessions_[sid]; }
-
-            template<typename Cmd>
-            void setCmdHandler(SessionId sid, std::function<void(Cmd*)> handler)
-            {
-                if (!this->mSessions_.contains(sid))
-                {
-                    this->mSessions_[sid] = new IpcClient();
-                }
-                this->mSessions_[sid]->setCmdHandler<Cmd>(handler);
-            }
 
         private:
             QTcpServer mSvr_;
-            std::vector<IpcClient*> mClients_;
             std::unordered_map<SessionId, IpcClient*> mSessions_;
+            std::unordered_map<SessionId, SessionHandler> mSessionHandlers_;
         };
     }   // namespace utils
 }   // namespace eegneo

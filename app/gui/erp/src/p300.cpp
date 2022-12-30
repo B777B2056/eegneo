@@ -8,6 +8,7 @@
     #include <mutex>
 #endif
 
+#include <QMovie>
 #include <QMessageBox>
 #include <QString>
 #include "common/common.h"
@@ -17,7 +18,7 @@
 #pragma execution_character_set("utf-8")
 #endif
 
-static QString RESOURCE_ROOT_PATH = ":/erp/p300/resource/p300/oddball/";
+static QString ERP_RESOURCE_ROOT_PATH = ":/erp/p300/resource/p300/oddball/";
 
 ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -26,17 +27,10 @@ ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     , ui(new Ui::p300)
 {
     ui->setupUi(this);
-    // 设置全黑背景色
-    QPalette palette(this->palette());
-    palette.setColor(QPalette::Window, Qt::black);
-    this->setPalette(palette);
-    // 显示准备界面
     ui->label->setAlignment(Qt::AlignCenter);
-    ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "gotask.jpg"));
-    ui->label->show();
     this->setCentralWidget(ui->label);
     // 初始化
-    this->init(); 
+    this->initIpc();
 }
 
 ErpP300OddballWindow::~ErpP300OddballWindow()
@@ -45,10 +39,52 @@ ErpP300OddballWindow::~ErpP300OddballWindow()
     delete ui;
 }
 
-void ErpP300OddballWindow::init()
+void ErpP300OddballWindow::initIpc()
 {
+    // 显示加载动画
+    auto* movie = new QMovie(":/images/resource/Images/loading.gif");
+    ui->label->setMovie(movie);
+    movie->start();
+    // 采集软件所在电脑的Ip地址和端口号
     auto& config = eegneo::utils::ConfigLoader::instance();
+    auto ip = config.get<std::string>("ERP", "AcquisitionIpAddr");
+    auto port = config.get<std::uint16_t>("IpcServerIpPort");
+    this->mIpc_ = new eegneo::utils::IpcClient(eegneo::SessionId::ERPSession, ip.c_str(), port);
+    this->mIpc_->setConnectedCallback([this, movie]()->void
+    {
+        this->initExpParameters();
+        this->initUI();
+        // 加载完成
+        movie->stop();    
+        delete movie;
+    });
+    this->mIpc_->setErrorCallback([this](QAbstractSocket::SocketError err)->void
+    {
+        switch (err)
+        {
+        case QAbstractSocket::ConnectionRefusedError:
+            QMessageBox::critical(this, tr("错误"), "连接采集平台被拒绝", QMessageBox::Ok);
+            break;
+        case QAbstractSocket::HostNotFoundError:
+            QMessageBox::critical(this, tr("错误"), "采集平台地址错误，请检查IP地址配置", QMessageBox::Ok);
+            break;
+        case QAbstractSocket::SocketTimeoutError:
+            QMessageBox::critical(this, tr("错误"), "连接采集平台失败", QMessageBox::Ok);
+            break;
+        case QAbstractSocket::NetworkError:
+            QMessageBox::critical(this, tr("错误"), "网络错误，请检查网络是否正常", QMessageBox::Ok);
+            break;
+        default:
+            QMessageBox::critical(this, tr("错误"), "Unknown error", QMessageBox::Ok);
+            break;
+        }
+    });
+}
+
+void ErpP300OddballWindow::initExpParameters()
+{
     // 设置实验参数
+    auto& config = eegneo::utils::ConfigLoader::instance();
     this->mImagesInPracticeTotalCount_ = config.get<int>("ERP", "ImagesInPracticeTotalCount");
     this->mImagesInExperimentTotalCount_ = config.get<int>("ERP", "ImagesInExperimentTotalCount");
     this->mStimulusImageRatio_ = config.get<double>("ERP", "StimulusImageRatio");
@@ -56,11 +92,19 @@ void ErpP300OddballWindow::init()
     this->mImageDurationMs_ = config.get<int>("ERP", "ImageDurationMs");
     this->mBlankDurationMsLowerBound_ = config.get<int>("ERP", "BlankDurationMsLowerBound");
     this->mBlankDurationMsUpperBound_ = config.get<int>("ERP", "BlankDurationMsUpperBound");
-    // 采集软件所在电脑的Ip地址和端口号
-    auto ip = config.get<std::string>("ERP", "AcquisitionIpAddr");
-    auto port = config.get<std::uint16_t>("IpcServerIpPort");
-    this->mIpc_ = new eegneo::utils::IpcClient(eegneo::SessionId::ERPSession, ip.c_str(), port);
+}
+
+void ErpP300OddballWindow::initUI()
+{
+    // 设置全黑背景色
+    QPalette palette(this->palette());
+    palette.setColor(QPalette::Window, Qt::black);
+    this->setPalette(palette);
+    // 显示准备界面
+    ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "gotask.jpg"));
+    ui->label->show();
     // 是否全屏显示
+    auto& config = eegneo::utils::ConfigLoader::instance();
     if (config.get<bool>("ERP", "IsFullScreen"))   this->showFullScreen();
 }
 
@@ -134,18 +178,18 @@ void ErpP300OddballWindow::playImagesRound(int imgNumRound)
     {
         // 十字准星显示周期（默认）：800ms
         ui->label->setVisible(true);
-        ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "cross.png"));
+        ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "cross.png"));
         ::DelayMs(this->mCrossDurationMs_);
         // 数字显示周期（默认）：50ms
         if(Stimulation == this->chooseImg(imgNumRound))
         {
-            ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "2.bmp"));
+            ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "2.bmp"));
             ++this->mStimulusImageCount_;
             if(!this->mIsInPractice_)    this->sendMarker("2");
         }
         else
         {
-            ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "8.bmp"));
+            ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "8.bmp"));
             if(!this->mIsInPractice_)    this->sendMarker("8");
         }
         ::DelayMs(this->mImageDurationMs_);
@@ -160,7 +204,7 @@ void ErpP300OddballWindow::practiceEnd()
     this->mIsInPractice_ = false;
     // 显示选择界面
     ui->label->setVisible(true);
-    ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "ifgo.jpg"));
+    ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "ifgo.jpg"));
     // 计数器重置
     this->mStimulusImageCount_ = 0;
 }
@@ -171,7 +215,7 @@ void ErpP300OddballWindow::experimentEnd()
     this->saveBehavioral();
     // 显示结束界面
     ui->label->setVisible(true);
-    ui->label->setPixmap(QPixmap(RESOURCE_ROOT_PATH + "end.jpg"));
+    ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "end.jpg"));
     // 退出全屏标志位
     this->mIsInPractice_ = false;
     this->mIsInExperiment_ = false;

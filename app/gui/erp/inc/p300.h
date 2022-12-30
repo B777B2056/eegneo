@@ -54,7 +54,9 @@ private:
     std::vector<std::tuple<double, std::string>> mEvents_;  // 毫秒级时间间隔-事件描述
     Ui::p300 *ui;
 
-    void init();    // 从配置文件种读取参数
+    void initIpc();
+    void initExpParameters();    // 从配置文件种读取参数
+    void initUI();
     ImgLabel chooseImg(int imgNumRound) const;
     void sendMarker(const char* msg);
     void playImagesRound(int imgNumRound);  // 播放图片

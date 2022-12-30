@@ -36,12 +36,12 @@ namespace eegneo
         this->initIpc();
         this->initTaskThreads();
 
-        // if (const auto& pyerrmsg = this->mTopoPlot_->error(); !pyerrmsg.empty())
-        // {
-        //     ErrorCmd cmd;
-        //     ::memcpy(cmd.errmsg, pyerrmsg.c_str(), pyerrmsg.size());
-        //     this->mIpcWrapper_->sendCmd(cmd);
-        // }
+        if (const auto& pyerrmsg = this->mTopoPlot_->error(); !pyerrmsg.empty())
+        {
+            ErrorCmd cmd;
+            ::memcpy(cmd.errmsg, pyerrmsg.c_str(), pyerrmsg.size());
+            this->mIpcWrapper_->sendCmd(cmd);
+        }
     }
 
     AcquisitionBackend::~AcquisitionBackend()

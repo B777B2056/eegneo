@@ -23,7 +23,8 @@ void SetInfo::on_comboBox_currentIndexChanged(int index)
 {
     if (1 == index) this->mChannelNum_ = 8LL;
     else if (2 == index) this->mChannelNum_ = 16LL;
-    else this->mChannelNum_ = 32LL;
+    else if (3 == index) this->mChannelNum_ = 32LL;
+    else this->mChannelNum_ = 0LL;
 }
 
 void SetInfo::on_comboBox_2_currentIndexChanged(int index)
@@ -31,5 +32,6 @@ void SetInfo::on_comboBox_2_currentIndexChanged(int index)
     if (1 == index) this->mSampleRate_ = 128LL;
     else if (2 == index) this->mSampleRate_ = 256LL;
     else if (3 == index) this->mSampleRate_ = 512LL;
-    else this->mSampleRate_ = 1024LL;
+    else if (4 == index) this->mSampleRate_ = 1024LL;
+    else this->mSampleRate_ = 0LL;
 }

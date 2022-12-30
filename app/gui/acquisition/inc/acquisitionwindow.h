@@ -1,11 +1,9 @@
 ﻿#pragma once
+#include <string>
+#include <vector>
 #include <QMainWindow>
 #include <QtCharts>
 #include <QProcess>
-#include <fstream>
-#include <string>
-#include <array>
-#include <vector>
 #include "plotter.h"
 #include "utils/ipc.h"
 
@@ -59,10 +57,10 @@ private:
     std::size_t mSampleRate_; 
     std::size_t mChannelNum_;
     QProcess mBackend_;
+    QSharedMemory* mSharedMemory_ = nullptr;
     // 绘图相关
     QTimer* mPlotTimer_ = nullptr;
     double* mSignalBuf_ = nullptr;
-    QSharedMemory* mSharedMemory_ = nullptr;
     eegneo::EEGWavePlotter* mSignalPlotter_ = nullptr;
     eegneo::FFTWavePlotter* mFFTPlotter_ = nullptr;
     eegneo::TopographyPlotter* mTopoPlotter_ = nullptr;
@@ -72,12 +70,6 @@ private:
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关
     int mFileSaveFinishedFlag_;
-    QString mChannelNames_[64];
-    // 视觉刺激实验中的图片总数量
-    int _p300OddballImgNum;
     // UI
     Ui::AcquisitionWindow *ui;
-
-signals:
-    void closeAll();// 返回主界面
 };

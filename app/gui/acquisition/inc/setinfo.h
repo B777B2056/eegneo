@@ -15,9 +15,10 @@ public:
     explicit SetInfo(QWidget *parent = nullptr);
     ~SetInfo();
 
-    QString subjectNum() const { return mSubjectNum_; }
-    std::size_t channelNum() const { return mChannelNum_; }
-    std::size_t sampleRate() const { return mSampleRate_; }
+    QString subjectNum() const { return this->mSubjectNum_; }
+    std::size_t channelNum() const { return this->mChannelNum_; }
+    std::size_t sampleRate() const { return this->mSampleRate_; }
+    bool isValid() const { return this->mChannelNum_ && this->mSampleRate_; }
 
 private slots:
     void on_num_editingFinished();
