@@ -3,11 +3,6 @@
 #include <cstring>
 #include <sstream>
 #include <fstream>
-
-#if !defined(__unix__) && !defined(_MSC_VER)
-    #include <mutex>
-#endif
-
 #include <QMovie>
 #include <QMessageBox>
 #include <QString>
@@ -289,10 +284,6 @@ static std::tm localtime_xp(std::time_t timer)
     ::localtime_r(&timer, &bt);
 #elif defined(_MSC_VER)
     ::localtime_s(&bt, &timer);
-#else
-    static std::mutex mtx;
-    std::unique_lock<std::mutex> lock(mtx);
-    bt = *std::localtime(&timer);
 #endif
     return bt;
 }

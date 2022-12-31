@@ -58,6 +58,7 @@ private:
     std::size_t mChannelNum_;
     QProcess mBackend_;
     QSharedMemory* mSharedMemory_ = nullptr;
+    eegneo::utils::IpcService* mIpcWrapper_ = nullptr;
     // 绘图相关
     QTimer* mPlotTimer_ = nullptr;
     double* mSignalBuf_ = nullptr;
@@ -65,7 +66,6 @@ private:
     eegneo::FFTWavePlotter* mFFTPlotter_ = nullptr;
     eegneo::TopographyPlotter* mTopoPlotter_ = nullptr;
     // 滤波相关
-    eegneo::utils::IpcService* mIpcWrapper_ = nullptr;
     eegneo::RecordCmd mRecCmd_;
     eegneo::FiltCmd mFiltCmd_;
     // 文件保存有关

@@ -5,5 +5,6 @@ set(UTILS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/utils")
 
 include_directories(".")
 
-add_subdirectory("gui")
-add_subdirectory("backend")
+add_subdirectory("acquisition")
+# add_subdirectory("analyzer")
+add_subdirectory("erp")
