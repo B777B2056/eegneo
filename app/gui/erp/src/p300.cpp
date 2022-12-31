@@ -297,11 +297,11 @@ static std::tm localtime_xp(std::time_t timer)
     return bt;
 }
 
-static std::string FormatTimePoint(const std::string& fmt = "%Y_%m_%d_%X")
+static std::string FormatTimePoint()
 {
     auto bt = localtime_xp(std::time(0));
     char buf[64];
-    return {buf, std::strftime(buf, sizeof(buf), fmt.c_str(), &bt)};
+    return {buf, std::strftime(buf, sizeof(buf), "%Y_%m_%d_%H_%M_%S", &bt)};
 }
 
 void ErpP300OddballWindow::writeIntoBehavioralFile(const BehavioralInfo& info)

@@ -1,5 +1,4 @@
 #include "ipc.h"
-#include <cassert>
 
 namespace eegneo
 {
@@ -26,7 +25,6 @@ namespace eegneo
         IpcClient::IpcClient(QTcpSocket* channel)
             : mSid_(SessionId::Invalid), mChannel_(channel), mEventLoopHook_(new QTimer())
         {
-            assert(channel != nullptr);
             QObject::connect(mChannel_, &QTcpSocket::readyRead, [this]()->void{ this->handleRead(); });
             QObject::connect(mEventLoopHook_, &QTimer::timeout, [this]()->void{ this->handleWrite(); });
             mEventLoopHook_->start(0);
@@ -92,6 +90,12 @@ namespace eegneo
                 auto* clt = new IpcClient(mSvr_.nextPendingConnection());
                 clt->setCmdHandler<InitCmd>([this, clt](InitCmd*)->void
                 {
+                    // 保证一个session只有一个进程连上来，从而保证其他进程掉线重连
+                    if (this->mSessions_.contains(clt->sessionId()))
+                    {
+                        auto* lastClt = this->mSessions_[clt->sessionId()];
+                        delete lastClt; // 断开原本的连接
+                    }
                     this->mSessions_[clt->sessionId()] = clt;
                     if (this->mSessionHandlers_.contains(clt->sessionId()))
                     {
