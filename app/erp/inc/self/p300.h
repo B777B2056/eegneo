@@ -5,14 +5,14 @@
 #include <QMainWindow>
 #include <QKeyEvent>
 #include <QMouseEvent>
-#include "utils/ipc.h"
+#include "baseipc.h"
 
 namespace Ui {
 class p300;
 }
 
 // P300 Oddball范式
-class ErpP300OddballWindow : public QMainWindow
+class ErpP300OddballWindow : public QMainWindow, public eegneo::erp::BaseIpc
 {
     Q_OBJECT
 
@@ -44,7 +44,6 @@ private:
     using TimePointType = std::chrono::time_point<std::chrono::steady_clock>;
 
 private:
-    eegneo::utils::IpcClient* mIpc_;
     double mStimulusImageRatio_;
     int mImagesInPracticeTotalCount_, mImagesInExperimentTotalCount_;
     int mCrossDurationMs_, mImageDurationMs_, mBlankDurationMsLowerBound_, mBlankDurationMsUpperBound_;
@@ -54,7 +53,6 @@ private:
     std::vector<std::tuple<double, std::string>> mEvents_;  // 毫秒级时间间隔-事件描述
     Ui::p300 *ui;
 
-    void initIpc();
     void initExpParameters();    // 从配置文件种读取参数
     void initUI();
     ImgLabel chooseImg(int imgNumRound) const;

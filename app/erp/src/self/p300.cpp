@@ -1,9 +1,8 @@
-﻿#include "p300.h"
+﻿#include "self/p300.h"
 #include "ui_p300.h"
 #include <cstring>
 #include <sstream>
 #include <fstream>
-#include <QMovie>
 #include <QMessageBox>
 #include <QString>
 #include "common/common.h"
@@ -17,63 +16,22 @@ static QString ERP_RESOURCE_ROOT_PATH = ":/erp/p300/resource/p300/oddball/";
 
 ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)
     : QMainWindow(parent)
-    , mIpc_(nullptr)
+    , eegneo::erp::BaseIpc()
     , mIsInPractice_(true), mIsInExperiment_(false), mIsEnded_(false), mStimulusImageCount_(0)
     , ui(new Ui::p300)
 {
     ui->setupUi(this);
-    ui->label->setAlignment(Qt::AlignCenter);
-    this->setCentralWidget(ui->label);
     // 初始化
-    this->initIpc();
+    this->mIpc_->setConnectedCallback([this]()->void
+    {
+        this->initExpParameters();
+        this->initUI();
+    });
 }
 
 ErpP300OddballWindow::~ErpP300OddballWindow()
 {
-    delete mIpc_;
     delete ui;
-}
-
-void ErpP300OddballWindow::initIpc()
-{
-    // 显示加载动画
-    auto* movie = new QMovie(":/images/resource/Images/loading.gif");
-    ui->label->setMovie(movie);
-    movie->start();
-    // 采集软件所在电脑的Ip地址和端口号
-    auto& config = eegneo::utils::ConfigLoader::instance();
-    auto ip = config.get<std::string>("ERP", "AcquisitionIpAddr");
-    auto port = config.get<std::uint16_t>("IpcServerIpPort");
-    this->mIpc_ = new eegneo::utils::IpcClient(eegneo::SessionId::ERPSession, ip.c_str(), port);
-    this->mIpc_->setConnectedCallback([this, movie]()->void
-    {
-        this->initExpParameters();
-        this->initUI();
-        // 加载完成
-        movie->stop();    
-        delete movie;
-    });
-    this->mIpc_->setErrorCallback([this](QAbstractSocket::SocketError err)->void
-    {
-        switch (err)
-        {
-        case QAbstractSocket::ConnectionRefusedError:
-            QMessageBox::critical(this, tr("错误"), "连接采集平台被拒绝", QMessageBox::Ok);
-            break;
-        case QAbstractSocket::HostNotFoundError:
-            QMessageBox::critical(this, tr("错误"), "采集平台地址错误，请检查IP地址配置", QMessageBox::Ok);
-            break;
-        case QAbstractSocket::SocketTimeoutError:
-            QMessageBox::critical(this, tr("错误"), "连接采集平台失败", QMessageBox::Ok);
-            break;
-        case QAbstractSocket::NetworkError:
-            QMessageBox::critical(this, tr("错误"), "网络错误，请检查网络是否正常", QMessageBox::Ok);
-            break;
-        default:
-            QMessageBox::critical(this, tr("错误"), "Unknown error", QMessageBox::Ok);
-            break;
-        }
-    });
 }
 
 void ErpP300OddballWindow::initExpParameters()
@@ -96,6 +54,8 @@ void ErpP300OddballWindow::initUI()
     palette.setColor(QPalette::Window, Qt::black);
     this->setPalette(palette);
     // 显示准备界面
+    ui->label->setAlignment(Qt::AlignCenter);
+    this->setCentralWidget(ui->label);
     ui->label->setPixmap(QPixmap(ERP_RESOURCE_ROOT_PATH + "gotask.jpg"));
     ui->label->show();
     // 是否全屏显示
@@ -138,9 +98,7 @@ void ErpP300OddballWindow::mousePressEvent(QMouseEvent *event)
 
 void ErpP300OddballWindow::sendMarker(const char* msg)
 {
-    eegneo::MarkerCmd cmd;
-    ::memcpy(cmd.msg, msg, std::strlen(msg));
-    mIpc_->sendCmd(cmd);
+    BaseIpc::sendMarker(msg);
     // 记录时刻与时间
     auto curTime = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - this->mExpStartTime_).count();
     this->mEvents_.emplace_back(std::make_tuple(curTime, msg));
