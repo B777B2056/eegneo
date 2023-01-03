@@ -12,9 +12,6 @@ namespace eegneo
             EPrimeProxy();
             ~EPrimeProxy();
 
-            bool open() { return this->mSerialPort_.open(QSerialPort::ReadOnly); }
-            void close() { this->mSerialPort_.close(); }
-
             QSerialPort& serialPort() { return this->mSerialPort_; }
 
         private:

@@ -31,11 +31,6 @@ int main(int argc, char *argv[])
         if(int rec = dialog.exec(); QDialog::Accepted == rec)
         {
             proxy = dialog.proxy();
-            if (!proxy->open())
-            {
-                QMessageBox::critical(nullptr, QObject::tr("错误"), "端口打开失败", QMessageBox::Ok);
-                return 0;
-            }
         }
         else
         {
