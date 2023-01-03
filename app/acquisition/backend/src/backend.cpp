@@ -8,6 +8,7 @@
 #include "utils/config.h"
 #include "utils/ipc.h"
 
+#define TASK_NUM 3
 #define InitIpcServer(CMDType)   \
     do  \
     {   \
@@ -18,12 +19,11 @@
     }   \
     while (0)
 
-#define SUB_THREAD_TASK_NUM 3
-
 namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum, std::size_t sampleFreqHz)
-        : mIsStop_(false), mIsOnceSampleDone_(false), mThreadPool_(SUB_THREAD_TASK_NUM)
+        : mSmphSignalA_(0), mSmphSignalB_(0)
+        , mIsStop_(false), mThreadPool_(TASK_NUM - 1)
         , mIpcWrapper_(nullptr)
         , mDataSampler_(new TestDataSampler(channelNum))
         , mChannelNum_(channelNum)
@@ -47,7 +47,6 @@ namespace eegneo
     AcquisitionBackend::~AcquisitionBackend()
     {
         this->mIsStop_.store(true);
-        this->mIsOnceSampleDone_.store(false);
         delete mIpcWrapper_;
         delete[] mFiltBuf_;
         delete[] mFilter_;
@@ -83,33 +82,30 @@ namespace eegneo
         {
             while (!this->mIsStop_.load())
             {
-                this->mIsOnceSampleDone_.store(false);
                 this->doSample(); 
-                this->mIsOnceSampleDone_.store(true);
+                this->mSmphSignalA_.release();
+                this->mSmphSignalB_.release();
             }
         });
+        
         this->mThreadPool_.submitTask([this]()->void
         {
             while (!this->mIsStop_.load())
             {
-                if (this->mIsOnceSampleDone_.load())
-                {
-                    this->doFilt();
-                    this->doFFT();
-                    // 降低cpu使用率
-                    using namespace std::chrono_literals;
-                    std::this_thread::sleep_for(50ms);
-                }
+                this->mSmphSignalA_.acquire();
+                this->doFilt();
+                this->doFFT();
+                // 降低cpu使用率
+                // using namespace std::chrono_literals;
+                // std::this_thread::sleep_for(50ms);
             }
         });
     }
 
     void AcquisitionBackend::doTaskInMainThread()
     {
-        if (this->mIsOnceSampleDone_.load())
-        {
-            this->doTopoPlot();
-        }
+        this->mSmphSignalB_.acquire();
+        this->doTopoPlot();
     }
 
     void AcquisitionBackend::handleRecordCmd(RecordCmd* cmd)

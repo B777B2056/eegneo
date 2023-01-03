@@ -1,4 +1,5 @@
 #pragma once
+#include <semaphore>
 #include <QSharedMemory>
 #include "threadpool.h"
 #include "common/common.h"
@@ -24,8 +25,11 @@ namespace eegneo
         void doTaskInMainThread();
 
     private:
-        std::atomic<bool> mIsStop_, mIsOnceSampleDone_;
+        std::binary_semaphore mSmphSignalA_;
+        std::binary_semaphore mSmphSignalB_;
+        std::atomic<bool> mIsStop_;
         ThreadPool mThreadPool_;
+
         utils::IpcClient* mIpcWrapper_;
 
         EEGDataSampler* mDataSampler_;
