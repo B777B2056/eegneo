@@ -75,19 +75,6 @@ namespace eegneo
         static constexpr double MagicCoefficient = 0.022351744455307063;
     };
 
-    // class ShanxiDataSampler : public EEGDataSampler
-    // {
-    // public:
-    //     ShanxiDataSampler(std::size_t channelNum);
-    //     ~ShanxiDataSampler() = default;
-
-    //     void sampleOnce() override;
-
-    // private:
-    //     QUdpSocket client;
-    //     double turnBytes2uV(unsigned char *bytes);
-    // };
-
     class UsbDataSampler : public EEGDataSampler
     {
     public:

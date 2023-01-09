@@ -1,11 +1,8 @@
 #include "sampler.h"
 #include <cstring>
 #include <cstdlib>
-#include <chrono>
-#include <thread>
 #include <QCoreApplication>
 #include <QByteArray>
-#include <QTcpSocket>
 
 namespace eegneo
 {
@@ -174,89 +171,6 @@ namespace eegneo
         return (double)target * MagicCoefficient;
     }
 
-    // ShanxiDataSampler::ShanxiDataSampler(std::size_t channelNum)
-    //     : EEGDataSampler(channelNum)
-    // {
-    //     client.bind(QHostAddress::LocalHost, 4000);
-    // }
-
-    // void ShanxiDataSampler::sampleOnce()
-    // {
-    //     while(!client.hasPendingDatagrams());
-    //     char bytes[72];
-    //     int size = client.readDatagram(bytes, 72);
-    //     for(int i = 0; i < size; i++)
-    //     {
-    //         if((i < size - 1)
-    //                 && (bytes[i] == (char)0xc0) && (bytes[i + 1] == (char)0xa0))
-    //         {
-    //             if((i < size - 71)
-    //                     && (bytes[i + 66] == (char)0x00) && (bytes[i + 67] == (char)0x00)
-    //                     && (bytes[i + 68] == (char)0x00) && (bytes[i + 69] == (char)0x00)
-    //                     && (bytes[i + 70] == (char)0x00) && (bytes[i + 71] == (char)0x00))
-    //             {
-    //                 int curChannel = 0;
-    //                 for(int offset = 2; offset < 66; offset += 8)
-    //                 {
-    //                     unsigned char chs[8] = {
-    //                                             (unsigned char)bytes[i+offset], (unsigned char)bytes[i+offset+1],
-    //                                             (unsigned char)bytes[i+offset+2], (unsigned char)bytes[i+offset+3],
-    //                                             (unsigned char)bytes[i+offset+4], (unsigned char)bytes[i+offset+5],
-    //                                             (unsigned char)bytes[i+offset+6], (unsigned char)bytes[i+offset+7]
-    //                                             };
-    //                     mBuf_[curChannel++] = turnBytes2uV(chs);
-    //                 }
-    //                 i += 39;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // double ShanxiDataSampler::turnBytes2uV(unsigned char *bytes)
-    // {
-    //     int i, exponent;
-    //     unsigned int sign;
-    //     unsigned long long mantissa;
-    //     double curNum = 0.0;
-    //     std::string str = "";
-    //     sign = (bytes[7] & 0x80) >> 7;
-    //     exponent = (static_cast<unsigned int>(bytes[7] & 0x7f) << 4) + (static_cast<unsigned int>(bytes[6] & 0xf0) >> 4) - 1023;
-    //     mantissa = (static_cast<unsigned long long>(bytes[6] & 0x0f) << 48)
-    //             + (static_cast<unsigned long long>(bytes[5]) << 40)
-    //             + (static_cast<unsigned long long>(bytes[4]) << 32)
-    //             + (static_cast<unsigned long long>(bytes[3]) << 24)
-    //             + (static_cast<unsigned long long>(bytes[2]) << 16)
-    //             + (static_cast<unsigned long long>(bytes[1]) << 8)
-    //             + (static_cast<unsigned long long>(bytes[0]));
-    //     while(mantissa)
-    //     {
-    //         str += ('0' + mantissa % 2);
-    //         mantissa /= 2;
-    //     }
-    //     while(str.length() < 52)
-    //         str += '0';
-    //     str += '1';
-    //     if(exponent >= 0)
-    //     {
-    //         for(i = 0; i < (int)str.length(); i++)
-    //         {
-    //             if((int)i <= exponent)
-    //                 curNum += ((str[str.length() - i - 1] - '0') * pow(2, exponent - i));
-    //             else
-    //                 curNum += ((str[str.length() - i - 1] - '0') * (1.0 / pow(2, i - exponent)));
-    //         }
-    //     }
-    //     else
-    //     {
-    //         for(i = 0; i < -exponent - 1; i++)
-    //             str += '0';
-    //         for(i = 0; i < (int)str.length(); i++)
-    //             curNum += ((str[str.length() - i - 1] - '0') * pow(2, -i - 1));
-    //     }
-    //     curNum *= pow(-1, sign);
-    //     return curNum;
-    // }
-
     UsbDataSampler::UsbDataSampler(std::size_t channelNum)
         : EEGDataSampler(channelNum)
         , mRawBuf_(new BYTE[3 * channelNum + 1])
@@ -301,36 +215,32 @@ namespace eegneo
         if (LIBUSB_SUCCESS != ::libusb_get_active_config_descriptor(::libusb_get_device(this->mUsbHolderPtr_), &config)) 
         {
             // Error
-            goto CLEAN;
+            return;
         }
         // 匹配第一个输入输出端点
-        for (std::uint8_t i = 0; i < config->bNumInterfaces; ++i)
+        auto* interface = &config->interface[0];
+        auto* interfaceDescriptor = &interface->altsetting[0];
+
+        for (std::uint8_t k = 0; k < interfaceDescriptor->bNumEndpoints; ++k)
         {
-            auto& interface = config->interface[i];
-            for (int j = 0; j < interface.num_altsetting; ++j)
+            auto* endpointDescriptor = &interfaceDescriptor->endpoint[k];
+            if ((endpointDescriptor->bmAttributes & LIBUSB_TRANSFER_TYPE_MASK) & (LIBUSB_TRANSFER_TYPE_BULK)) 
             {
-                auto& interfaceDescriptor = interface.altsetting[j];
-                for (std::uint8_t k = 0; j < interfaceDescriptor.bNumEndpoints; ++k)
+                if (LIBUSB_ENDPOINT_IN == (LIBUSB_ENDPOINT_IN & endpointDescriptor->bEndpointAddress))
                 {
-                    if (this->mEpIN_ && this->mEpOUT_)  goto CLEAN;
-                    auto& endpointDescriptor = interfaceDescriptor.endpoint[k];
-                    if ((endpointDescriptor.bmAttributes & LIBUSB_TRANSFER_TYPE_MASK) & (LIBUSB_TRANSFER_TYPE_BULK)) 
-                    {
-                        if (LIBUSB_ENDPOINT_IN == (LIBUSB_ENDPOINT_IN & endpointDescriptor.bEndpointAddress))
-                        {
-                            this->mEpIN_ = endpointDescriptor.bEndpointAddress;
-                            ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpIN_); //清除暂停标志
-                        }
-                        else if (LIBUSB_ENDPOINT_OUT == (LIBUSB_ENDPOINT_OUT & endpointDescriptor.bEndpointAddress))
-                        {
-                            this->mEpOUT_ = endpointDescriptor.bEndpointAddress;
-                            ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpOUT_); //清除暂停标志
-                        }
-                    }
+                    this->mEpIN_ = endpointDescriptor->bEndpointAddress;
+                    ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpIN_); //清除暂停标志
+                }
+                else if (LIBUSB_ENDPOINT_OUT == (LIBUSB_ENDPOINT_OUT & endpointDescriptor->bEndpointAddress))
+                {
+                    this->mEpOUT_ = endpointDescriptor->bEndpointAddress;
+                    ::libusb_clear_halt(this->mUsbHolderPtr_, this->mEpOUT_); //清除暂停标志
                 }
             }
+            if ((this->mEpIN_ > 0) && (this->mEpOUT_ > 0))  break;
         }
-        // 启用内核驱动程序自动分离
+
+        // 启用内核驱动程序自动分离（在Windows中，libusb需要附加驱动程序，因此分离驱动程序的功能毫无意义，故不检查返回值）
         ::libusb_set_auto_detach_kernel_driver(this->mUsbHolderPtr_, 1);
         // 初始化USB设备接口
         if (LIBUSB_SUCCESS != ::libusb_claim_interface(this->mUsbHolderPtr_, 0))
@@ -338,9 +248,6 @@ namespace eegneo
             // Error
             return;
         }
-        // 释放资源
-    CLEAN:
-        ::libusb_free_config_descriptor(config);
     }
 
     bool UsbDataSampler::checkConfig() const
@@ -365,36 +272,35 @@ namespace eegneo
 
     void UsbDataSampler::startTransfer()
     {
-        BYTE buf[1024] = {0xAD,0x02};
-        this->writeIntoDevice({buf, 2});
-        this->readFromDevice({buf, 512});
-        this->readFromDevice({buf, 512});
+        BYTE readBuf[512] = {0};
+        BYTE writeBuf[2] = {0xAD,0x02};
+        this->writeIntoDevice({writeBuf, 2});
+        this->readFromDevice({readBuf, 512});
+        this->readFromDevice({readBuf, 512});
         
-        buf[0] = 0xAD; buf[1] = 0x00;
-        this->writeIntoDevice({buf, 2});
+        writeBuf[0] = 0xAD; writeBuf[1] = 0x00;
+        this->writeIntoDevice({writeBuf, 2});
 
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(4s);
-
-        this->readFromDevice({buf, 36});
-        if (0xAE != buf[0])
+        this->readFromDevice({readBuf, 36});
+        if (0xAE != readBuf[0])
         {
-            // Error
+            // Error, should be array('B', [174, 0, 0, 0, 0, 0, 0, 96, 4, 1, 128, 1, 0, 0, 0, 0])
             return;
         }
 
-        buf[0] = 0xAD; buf[1] = 0x01;
-        this->writeIntoDevice({buf, 2});
+        writeBuf[0] = 0xAD; writeBuf[1] = 0x01;
+        this->writeIntoDevice({writeBuf, 2});
     }
 
     void UsbDataSampler::readFromDevice(std::span<BYTE> buf)
     {
         int length = static_cast<int>(buf.size_bytes());
-        for (int bytesTransferred = 0; bytesTransferred < length; )
+        int bytesTransferred;
+        for (bytesTransferred = 0; bytesTransferred < length; )
         {
             int ret = ::libusb_bulk_transfer(this->mUsbHolderPtr_, this->mEpIN_, 
                                              buf.data() + bytesTransferred, length - bytesTransferred, 
-                                             &bytesTransferred, 0u);
+                                             &bytesTransferred, 100u);
             if (LIBUSB_SUCCESS != ret)
             {
                 // Error
@@ -406,7 +312,8 @@ namespace eegneo
     void UsbDataSampler::writeIntoDevice(std::span<BYTE> buf)
     {
         int length = static_cast<int>(buf.size_bytes());
-        for (int bytesTransferred = 0; bytesTransferred < length; )
+        int bytesTransferred;
+        for (bytesTransferred = 0; bytesTransferred < length; )
         {
             int ret = ::libusb_bulk_transfer(this->mUsbHolderPtr_, this->mEpOUT_, 
                                              buf.data() + bytesTransferred, length - bytesTransferred, 
@@ -425,12 +332,12 @@ namespace eegneo
         for (std::size_t i = 0; i < this->mChannelNum_; ++i)
         {
             // 以大端字节序解析原始数据
-            std::uint32_t rawNum = 0;
-            rawNum |= this->mRawBuf_[3 * i];     rawNum <<= 16;
-            rawNum |= this->mRawBuf_[3 * i + 1]; rawNum <<= 8;
-            rawNum |= this->mRawBuf_[3 * i + 2];
+            std::int64_t rawNum = 0;
+            rawNum |= (this->mRawBuf_[3 * i + 0] * 0x100 * 0x100);
+            rawNum |= (this->mRawBuf_[3 * i + 1] * 0x100);
+            rawNum |= (this->mRawBuf_[3 * i + 2]);
             // 乘以系数转换为可读数据
-            this->mBuf_[i] = MagicCoefficient * static_cast<std::int32_t>(rawNum);
+            this->mBuf_[i] = MagicCoefficient * rawNum;
         }
     }
 }   // namespace eegneo

@@ -11,6 +11,6 @@ int main(int argc, char* argv[])
     // 启动backend在主线程中的任务，进入事件循环
     QTimer timer;
     QObject::connect(&timer, &QTimer::timeout, [&backend]{ backend.doTaskInMainThread(); });
-    timer.start();
+    timer.start(0);
     return app.exec();
 }

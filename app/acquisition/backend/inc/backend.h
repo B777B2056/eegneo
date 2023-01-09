@@ -1,5 +1,5 @@
 #pragma once
-#include <semaphore>
+#include <vector>
 #include <QSharedMemory>
 #include "threadpool.h"
 #include "common/common.h"
@@ -25,11 +25,8 @@ namespace eegneo
         void doTaskInMainThread();
 
     private:
-        std::binary_semaphore mSmphSignalA_;
-        std::binary_semaphore mSmphSignalB_;
-        std::atomic<bool> mIsStop_;
+        std::atomic<bool> mIsStop_, mIsOnceSampleDone_;
         ThreadPool mThreadPool_;
-
         utils::IpcClient* mIpcWrapper_;
 
         EEGDataSampler* mDataSampler_;
@@ -40,9 +37,10 @@ namespace eegneo
         FiltCmd mFiltCmd_;
 
         Filter* mFilter_; 
-        double* mFiltBuf_;
+        std::vector<double> mFiltBuf_;
 
         FFTCalculator* mFFT_;
+        std::vector<float> mFFTBuf_;
 
         TopoPlot* mTopoPlot_;
 
@@ -54,6 +52,8 @@ namespace eegneo
         void doFilt();
         void doFFT();
         void doTopoPlot();
+
+        void transferData();
 
         void handleRecordCmd(RecordCmd* cmd);
         void handleFiltCmd(FiltCmd* cmd);
