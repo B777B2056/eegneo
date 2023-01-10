@@ -14,27 +14,45 @@ namespace eegneo
 
     }
 
-    double Filter::lowPass(double data, double cutoffFreq)
+    void Filter::setupLowPassFilter(double cutoffFreq)
     {
         mLowPassFilter_.setup(mSampleFreqHz_, cutoffFreq);
+    }
+
+    void Filter::setupHighPassFilter(double cutoffFreq)
+    {
+        mHighPassFilter_.setup(mSampleFreqHz_, cutoffFreq);
+    }
+
+    void Filter::setupBandPassFilter(double lowCutoffFreq, double highCutoffFreq)
+    {
+        double centerFrequency = lowCutoffFreq + (highCutoffFreq - lowCutoffFreq) / 2;
+        double widthFrequency = (highCutoffFreq - lowCutoffFreq) / 2;
+        mBandPassFilter_.setup(mSampleFreqHz_, centerFrequency, widthFrequency);
+    }   
+
+    void Filter::setupNotchFilter(double cutoffFreq)
+    {
+        mNotchFilter_.setup(mSampleFreqHz_, cutoffFreq, 5.0);
+    }
+
+    double Filter::lowPass(double data)
+    {
         return mLowPassFilter_.filter(data);
     }
 
-    double Filter::highPass(double data, double cutoffFreq)
+    double Filter::highPass(double data)
     {
-        mHighPassFilter_.setup(mSampleFreqHz_, cutoffFreq);
         return mHighPassFilter_.filter(data);
     }
 
-    double Filter::bandPass(double data, double lowCutoffFreq, double highCutoffFreq)
+    double Filter::bandPass(double data)
     {
-        mBandPassFilter_.setup(mSampleFreqHz_, lowCutoffFreq, highCutoffFreq);
         return mBandPassFilter_.filter(data);
     }
 
-    double Filter::notch(double data, double notchFreq)
+    double Filter::notch(double data)
     {
-        mNotchFilter_.setup(mSampleFreqHz_, notchFreq, 1.0);
         return mNotchFilter_.filter(data);
     }
 }   // namespace eegneo

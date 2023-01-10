@@ -1,17 +1,10 @@
 ﻿#include "acquisitionwindow.h"
 #include "ui_acquisitionwindow.h"
-#include <cstdlib>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QDateTime>
 #include <QSharedMemory>
-#include <QStringList>
-#include "setinfo.h"
 #include "utils/config.h"
-
-#if _MSC_VER >= 1600
-#pragma execution_character_set("utf-8")
-#endif
 
 namespace 
 {
@@ -45,7 +38,6 @@ AcquisitionWindow::~AcquisitionWindow()
     delete mIpcWrapper_;
     delete mPlotTimer_;
     delete mSharedMemory_;
-    delete[] mSignalBuf_;
     delete mSignalPlotter_;
     delete mFFTPlotter_;
     delete mTopoPlotter_;
@@ -80,6 +72,11 @@ void AcquisitionWindow::initIPCSvr()
             QMessageBox::information(this, tr("数据采集"), "文件保存成功", QMessageBox::Ok);
         });
 
+        channel->setCmdHandler<eegneo::TopoReadyCmd>([this](eegneo::TopoReadyCmd*)->void
+        {
+            this->updateTopography();
+        });
+
         channel->setCmdHandler<eegneo::ErrorCmd>([this](eegneo::ErrorCmd* cmd)->void
         {
             QMessageBox::warning(this, tr("警告"), cmd->errmsg, QMessageBox::Ok);
@@ -103,33 +100,18 @@ void AcquisitionWindow::initIPCSvr()
 
 void AcquisitionWindow::show()
 {
-    // 待用户输入基本信息
-    SetInfo siw;
-USER_INPUT:
-    if(int rec = siw.exec(); QDialog::Accepted == rec)
-    {   
-        if (!siw.isValid())
-        {
-            QMessageBox::critical(this, tr("错误"), "参数设置错误", QMessageBox::Ok);
-            goto USER_INPUT;
-        }
-        this->mChannelNum_ = siw.channelNum();
-        this->mSampleRate_ = siw.sampleRate();
-        this->mFileName_ = siw.subjectNum() + "_" + QDateTime::currentDateTime().toString("yyyy_MM_dd_hh_mm_ss");
+    auto& config = eegneo::utils::ConfigLoader::instance();
+    this->mChannelNum_ = config.get<std::vector<std::string>>("Acquisition", "Electrodes").size();
+    this->mSampleRate_ = config.get<std::size_t>("Acquisition", "SampleFrequencyHz");
+    this->mFileName_ = QDateTime::currentDateTime().toString("yyyy_MM_dd_hh_mm_ss");
 
-        this->startDataSampler();
-        this->initSignalChart();
-        this->initFFTChart();
+    this->startDataSampler();
+    this->initSignalChart();
+    this->initFFTChart();
 
-        this->mPlotTimer_->start(GRAPH_FRESH_FREQ);
+    this->mPlotTimer_->start(GRAPH_FRESH_FREQ);
 
-        QMainWindow::show();
-    }
-    else
-    {
-        this->close();
-        std::exit(0);
-    }
+    QMainWindow::show();
 }
 
 void AcquisitionWindow::createMark(const QString& event)
@@ -147,16 +129,13 @@ void AcquisitionWindow::createMark(const QString& event)
 
 void AcquisitionWindow::startDataSampler()
 {
-    QStringList args;
-    args << QString::number(mChannelNum_) << QString::number(mSampleRate_);
-
     QObject::connect(&mBackend_, &QProcess::started, [this]()->void
     {
         mSharedMemory_ = new QSharedMemory{"Sampler"};
         while (!mSharedMemory_->attach());
     });
 
-    mBackend_.start(_BACKEND_EXE_PATH, args);
+    mBackend_.start(_BACKEND_EXE_PATH);
 }
 
 void AcquisitionWindow::stopDataSampler()
@@ -171,8 +150,8 @@ void AcquisitionWindow::setTimeAxisScale(std::int8_t t) { mSignalPlotter_->setAx
 
 void AcquisitionWindow::initSignalChart()
 {
-    this->mSignalBuf_ = new double[this->mChannelNum_];
-    this->mSignalPlotter_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH_FREQ, mSignalBuf_);
+    this->mSignalBuf_.resize(this->mChannelNum_);
+    this->mSignalPlotter_= new eegneo::EEGWavePlotter(this->mChannelNum_, this->mSampleRate_, GRAPH_FRESH_FREQ, mSignalBuf_.data());
 
     ui->graphicsView->setChart(this->mSignalPlotter_->chart());                                   
     this->mSignalPlotter_->setAxisXScale(eegneo::Second::FIVE);
@@ -191,7 +170,7 @@ void AcquisitionWindow::initFFTChart()
 void AcquisitionWindow::updateEEG()
 {
     if (!mSharedMemory_->lock()) return;
-    ::memcpy(mSignalBuf_, mSharedMemory_->data(), mChannelNum_ * sizeof(double));
+    ::memcpy(mSignalBuf_.data(), mSharedMemory_->data(), mSignalBuf_.size() * sizeof(double));
     if (!mSharedMemory_->unlock()) return;
 
     mSignalPlotter_->update();
@@ -256,7 +235,6 @@ void AcquisitionWindow::connectSignalAndSlot()
     { 
         this->updateEEG(); 
         this->updateFFT(); 
-        this->updateTopography();
     });
 
     QObject::connect(ui->filter, &QPushButton::clicked, [this]()->void
@@ -290,9 +268,25 @@ void AcquisitionWindow::connectSignalAndSlot()
     QObject::connect(ui->pushButton_4, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit_3->text()); });
     QObject::connect(ui->pushButton_5, &QPushButton::clicked, [this]()->void{ this->createMark(ui->lineEdit_4->text()); });
 
-    QObject::connect(ui->comboBox, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.lowCutoff = text.toDouble(); });
-    QObject::connect(ui->comboBox_2, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.highCutoff = text.toDouble(); });
-    QObject::connect(ui->comboBox_3, &QComboBox::currentTextChanged, [this](const QString& text)->void{ mFiltCmd_.notchCutoff = text.toDouble(); });
+    QObject::connect(ui->comboBox, &QComboBox::currentTextChanged, [this](const QString& text)->void
+    { 
+        bool ok;
+        mFiltCmd_.lowCutoff = text.toDouble(&ok); 
+        if (!ok) mFiltCmd_.lowCutoff = -1.0;
+    });
+
+    QObject::connect(ui->comboBox_2, &QComboBox::currentTextChanged, [this](const QString& text)->void
+    { 
+        bool ok;
+        mFiltCmd_.highCutoff = text.toDouble(&ok); 
+        if (!ok) mFiltCmd_.highCutoff = -1.0;
+    });
+    QObject::connect(ui->comboBox_3, &QComboBox::currentTextChanged, [this](const QString& text)->void
+    { 
+        bool ok;
+        mFiltCmd_.notchCutoff = text.toDouble(&ok);
+        if (!ok) mFiltCmd_.notchCutoff = -1.0;
+    });
 
     QObject::connect(ui->actionStart_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = true; mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(mRecCmd_); });
     QObject::connect(ui->actionStop_Recording, &QAction::triggered, [this]()->void{ mRecCmd_.isRecordOn = false; mIpcWrapper_->session(eegneo::SessionId::AccquisitionInnerSession)->sendCmd(mRecCmd_); });

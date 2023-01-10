@@ -10,6 +10,12 @@ constexpr const char* EVENT_CACHE_FILE_PATH = "event.temp";  // 事件临时记�
 
 class QTcpSocket;
 
+#define FiltType_NoFilt 0x00
+#define FiltType_LowPass 0x01
+#define FiltType_HighPass 0x02
+#define FiltType_BandPass 0x04
+#define FiltType_Notch 0x08
+
 namespace eegneo
 {
 
@@ -32,10 +38,11 @@ namespace eegneo
         Marker,
         FileSave,
         FileSavedFinished,
-        Error
+        Error,
+        TopoReady
     };
 
-    enum EDFFileType
+    enum EDFFileType : std::uint8_t
     {
         EDF = 1,
         BDF = 2
@@ -65,7 +72,39 @@ namespace eegneo
         double highCutoff = -1.0; 
         double notchCutoff = -1.0; 
 
-        bool isValid() const { return (sampleRate > 0) && ((lowCutoff > 0.0) || (highCutoff > 0.0) || (notchCutoff > 0.0)); }
+        bool isValid() const 
+        { 
+            return (sampleRate > 0) && ((lowCutoff > 0.0) || (highCutoff > 0.0) || (notchCutoff > 0.0)); 
+        }
+
+        int type() const
+        {
+            int ret = FiltType_NoFilt;
+            if ((lowCutoff >= 0.0) && (highCutoff < 0.0))   // 高通滤波
+            {
+                ret |= FiltType_HighPass;
+            }
+            else if ((lowCutoff < 0.0) && (highCutoff >= 0.0))  // 低通滤波
+            {
+                ret |= FiltType_LowPass;
+            }
+            else if ((lowCutoff >= 0.0) && (highCutoff >= 0.0)) // 带通滤波
+            {
+                if (lowCutoff < highCutoff)
+                {
+                    ret |= FiltType_BandPass;
+                }
+            }
+            else    // 无滤波
+            {
+
+            }
+            if (notchCutoff > 0.0)  // 陷波滤波（在上述滤波的基础上滤波）
+            {
+                ret |= FiltType_Notch;
+            }
+            return ret;
+        }
     };
 
     struct ShutdownCmd
@@ -94,6 +133,11 @@ namespace eegneo
     struct ErrorCmd
     {
         char errmsg[1024] = {'\0'};
+    };
+
+    struct TopoReadyCmd
+    {
+
     };
 
 #pragma pack(pop)
@@ -133,6 +177,10 @@ namespace eegneo
             else if constexpr (std::is_same_v<Cmd, ErrorCmd>)
             {
                 return CmdId::Error;
+            }
+            else if constexpr (std::is_same_v<Cmd, TopoReadyCmd>)
+            {
+                return CmdId::TopoReady;
             }
             else
             {

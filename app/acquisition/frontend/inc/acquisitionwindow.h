@@ -61,7 +61,7 @@ private:
     eegneo::utils::IpcService* mIpcWrapper_ = nullptr;
     // 绘图相关
     QTimer* mPlotTimer_ = nullptr;
-    double* mSignalBuf_ = nullptr;
+    std::vector<double> mSignalBuf_;
     eegneo::EEGWavePlotter* mSignalPlotter_ = nullptr;
     eegneo::FFTWavePlotter* mFFTPlotter_ = nullptr;
     eegneo::TopographyPlotter* mTopoPlotter_ = nullptr;

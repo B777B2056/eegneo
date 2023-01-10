@@ -255,14 +255,9 @@ namespace eegneo
         mView_->centerOn(mGraphicsPixmapItem_);
     }
 
-    static bool IsImageExist()
-    {
-        return QFileInfo{_TOPO_PIC_PATH}.isFile();
-    }
-
     void TopographyPlotter::update()
     {
-        if (!IsImageExist())    return;
+        if (!QFileInfo{_TOPO_PIC_PATH}.exists())    return;
         mGraphicsPixmapItem_->setPixmap(QPixmap(_TOPO_PIC_PATH));
     }
 }   // namespace eegneo

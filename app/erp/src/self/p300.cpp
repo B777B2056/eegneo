@@ -8,10 +8,6 @@
 #include "common/common.h"
 #include "utils/config.h"
 
-#if _MSC_VER >= 1600
-#pragma execution_character_set("utf-8")
-#endif
-
 static QString ERP_RESOURCE_ROOT_PATH = ":/erp/p300/resource/p300/oddball/";
 
 ErpP300OddballWindow::ErpP300OddballWindow(QWidget *parent)

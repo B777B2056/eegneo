@@ -1,5 +1,4 @@
 #include "backend.h"
-#include <chrono>
 #include "sampler.h"
 #include "eegtopo.h"
 #include "filter.h"
@@ -23,34 +22,25 @@
 namespace eegneo
 {
     AcquisitionBackend::AcquisitionBackend(std::size_t channelNum, std::size_t sampleFreqHz)
-        : mIsStop_(false), mIsOnceSampleDone_(false), mThreadPool_(SUB_THREAD_TASK_NUM)
+        : mSmphSignalA_(0), mSmphSignalB_(0) 
+        , mIsStop_(false), mThreadPool_(SUB_THREAD_TASK_NUM)
         , mIpcWrapper_(nullptr)
         , mDataSampler_(new UsbDataSampler(channelNum))
         , mChannelNum_(channelNum)
         , mSharedMemory_("Sampler")
-        , mFilter_(new Filter[channelNum]), mFiltBuf_(channelNum)
-        , mFFT_(new FFTCalculator[channelNum]), mFFTBuf_(mChannelNum_*(mFFT_[0].real().size()+mFFT_[0].im().size()))
+        , mFilter_(channelNum), mFiltBuf_(channelNum)
+        , mFFT_(channelNum), mFFTBuf_(mChannelNum_*(mFFT_[0].real().size()+mFFT_[0].im().size()))
         , mTopoPlot_(new TopoPlot(static_cast<double>(sampleFreqHz), channelNum))
     {
         this->initSharedMemory();
         this->initIpc();
         this->initTaskThreads();
-
-        if (const auto& pyerrmsg = this->mTopoPlot_->error(); !pyerrmsg.empty())
-        {
-            ErrorCmd cmd;
-            ::memcpy(cmd.errmsg, pyerrmsg.c_str(), pyerrmsg.size());
-            this->mIpcWrapper_->sendCmd(cmd);
-        }
     }
 
     AcquisitionBackend::~AcquisitionBackend()
     {
         this->mIsStop_.store(true);
-        this->mIsOnceSampleDone_.store(false);
         delete mIpcWrapper_;
-        delete[] mFilter_;
-        delete[] mFFT_;
         delete mTopoPlot_;
         delete mDataSampler_;
     }
@@ -78,38 +68,51 @@ namespace eegneo
 
     void AcquisitionBackend::initTaskThreads()
     {
-        this->mThreadPool_.submitTask([this]()->void
-        {
-            while (!this->mIsStop_.load())
-            {
-                this->mIsOnceSampleDone_.store(false);
-                this->doSample(); 
-                this->mIsOnceSampleDone_.store(true);
-            }
-        });
-        this->mThreadPool_.submitTask([this]()->void
-        {
-            while (!this->mIsStop_.load())
-            {
-                if (this->mIsOnceSampleDone_.load())
-                {
-                    this->doFilt();
-                    this->doFFT();
-                    // 降低cpu使用率
-                    using namespace std::chrono_literals;
-                    std::this_thread::sleep_for(50ms);
-                }
-            }
-        });
+        this->mThreadPool_.submitTask([this]()->void { this->doTaskInSampleThread(); });
+        this->mThreadPool_.submitTask([this]()->void { this->doTaskInCalculateThread(); });
     }
 
     void AcquisitionBackend::doTaskInMainThread()
     {
-        if (this->mIsOnceSampleDone_.load())
+        this->mSmphSignalB_.acquire();
+        this->doTopoPlot();
+
+        if (const auto& pyerrmsg = this->mTopoPlot_->error(); !pyerrmsg.empty())
         {
-            this->doTopoPlot();
+            this->handleError(pyerrmsg.c_str(), pyerrmsg.size());
         }
-        this->transferData();
+        else
+        {
+            this->mIpcWrapper_->sendCmd(TopoReadyCmd{});
+        }
+    }
+
+    void AcquisitionBackend::doTaskInSampleThread()
+    {
+        while (!this->mIsStop_.load())
+        {
+            this->doSample(); 
+            this->mSmphSignalA_.release();
+            this->mSmphSignalB_.release();
+        }
+    }
+
+    void AcquisitionBackend::doTaskInCalculateThread()
+    {
+        while (!this->mIsStop_.load())
+        {
+            this->mSmphSignalA_.acquire();
+            this->doFilt();
+            this->doFFT();
+            this->transferData();
+        }
+    }
+
+    void AcquisitionBackend::handleError(const char* msg, std::size_t len)
+    {
+        ErrorCmd cmd;
+        ::memcpy(cmd.errmsg, msg, len);
+        this->mIpcWrapper_->sendCmd(cmd);
     }
 
     void AcquisitionBackend::handleRecordCmd(RecordCmd* cmd)
@@ -130,6 +133,23 @@ namespace eegneo
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
             mFilter_[i].setSampleFreqHz(cmd->sampleRate);
+
+            if (mFiltCmd_.type() & FiltType_LowPass)
+            {
+                mFilter_[i].setupLowPassFilter(mFiltCmd_.highCutoff);
+            }
+            if (mFiltCmd_.type() & FiltType_HighPass)
+            {
+                mFilter_[i].setupHighPassFilter(mFiltCmd_.lowCutoff);
+            }
+            if (mFiltCmd_.type() & FiltType_BandPass)
+            {
+                mFilter_[i].setupBandPassFilter(mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
+            }
+            if (mFiltCmd_.type() & FiltType_Notch)
+            {
+                mFilter_[i].setupNotchFilter(mFiltCmd_.notchCutoff);
+            }
         }
     }
 
@@ -172,25 +192,21 @@ namespace eegneo
         if (!mFiltCmd_.isFiltOn) return;
         for (std::size_t i = 0; i < mChannelNum_; ++i)
         {
-            if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff < 0.0))   // 高通滤波
+            if (mFiltCmd_.type() & FiltType_LowPass)
             {
-                mFiltBuf_[i] = mFilter_[i].lowPass(mDataSampler_->data()[i], mFiltCmd_.lowCutoff);
+                mFiltBuf_[i] = mFilter_[i].lowPass(mDataSampler_->data()[i]);
             }
-            else if ((mFiltCmd_.lowCutoff < 0.0) && (mFiltCmd_.highCutoff >= 0.0))  // 低通滤波
+            if (mFiltCmd_.type() & FiltType_HighPass)
             {
-                mFiltBuf_[i] = mFilter_[i].highPass(mDataSampler_->data()[i], mFiltCmd_.highCutoff);
+                mFiltBuf_[i] = mFilter_[i].highPass(mDataSampler_->data()[i]);
             }
-            else if ((mFiltCmd_.lowCutoff >= 0.0) && (mFiltCmd_.highCutoff >= 0.0)) // 带通滤波
+            if (mFiltCmd_.type() & FiltType_BandPass)
             {
-                mFiltBuf_[i] = mFilter_[i].bandPass(mDataSampler_->data()[i], mFiltCmd_.lowCutoff, mFiltCmd_.highCutoff);
+                mFiltBuf_[i] = mFilter_[i].bandPass(mDataSampler_->data()[i]);
             }
-            else    // 无滤波
+            if (mFiltCmd_.type() & FiltType_Notch)
             {
-                mFiltBuf_[i] = mDataSampler_->data()[i];
-            }
-            if (mFiltCmd_.notchCutoff > 0.0)  // 陷波滤波（在上述滤波的基础上滤波）
-            {
-                mFiltBuf_[i] = mFilter_[i].notch(mFiltBuf_[i], mFiltCmd_.notchCutoff);
+                mFiltBuf_[i] = mFilter_[i].notch(mFiltBuf_[i]);
             }
         }
     }
