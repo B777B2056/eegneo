@@ -6,6 +6,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#define TOPO_PLOT_BUF_LEN 32
+
 namespace eegneo
 {
     void TopoPlot::PyErrorWrapper::init()
@@ -78,7 +80,7 @@ namespace eegneo
             ::PyList_SetItem(pPyList, i, ::Py_BuildValue("s", names[i].c_str()));
         }
 
-        PyObject* pArgs = ::PyTuple_New(3);
+        PyObject* pArgs = ::PyTuple_New(4);
         if (!pArgs)
         {
             this->mPyError_.setErrorMsg();
@@ -87,6 +89,7 @@ namespace eegneo
         ::PyTuple_SetItem(pArgs, 0, ::Py_BuildValue("d", this->mSampleFreqHz_));
         ::PyTuple_SetItem(pArgs, 1, pPyList);
         ::PyTuple_SetItem(pArgs, 2, ::Py_BuildValue("s", _TOPO_PIC_PATH));
+        ::PyTuple_SetItem(pArgs, 3, ::Py_BuildValue("i", TOPO_PLOT_BUF_LEN));
         return pArgs;
     }
 

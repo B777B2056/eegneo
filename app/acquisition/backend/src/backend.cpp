@@ -62,7 +62,7 @@ namespace eegneo
         }
         if (!mSharedMemory_.create(10240))
         {
-            throw "Shared memory create failed!";
+            this->handleError("Shared memory create failed!", 64);
         }
     }
 

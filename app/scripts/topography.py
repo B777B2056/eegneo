@@ -1,11 +1,10 @@
 import mne
 import matplotlib.pyplot as plt
 
-TOPO_PLOT_BUF_LEN = 32
-
 class TopoPlot:
-    def __init__(self, sfreq:float, ch_names:list, save_path:str) -> None:
+    def __init__(self, sfreq:float, ch_names:list, save_path:str, buf_len:int) -> None:
         self.sfreq = sfreq
+        self.buf_len = buf_len
         self.montage = mne.channels.make_standard_montage('standard_1020')
         self.info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types='eeg')
         self.path = save_path
@@ -13,8 +12,7 @@ class TopoPlot:
         self.data = [[] for i in range(self.n_chan)]
 
     def appendData(self, data:list) -> None:
-        global TOPO_PLOT_BUF_LEN
-        if len(self.data[0]) >= TOPO_PLOT_BUF_LEN:
+        if len(self.data[0]) >= self.buf_len:
             for i in range(self.n_chan):
                 self.data[i].pop(0)
         for i in range(self.n_chan):

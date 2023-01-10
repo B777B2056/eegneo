@@ -15,7 +15,7 @@ namespace
         FILE_SAVE_FINISHED
     };
 
-    constexpr std::uint16_t GRAPH_FRESH_FREQ = 50;   // 触发波形显示定时器的时间，单位为ms
+    constexpr std::uint16_t GRAPH_FRESH_FREQ = 20;   // 触发波形显示定时器的时间，单位为ms
 }
 
 AcquisitionWindow::AcquisitionWindow(QWidget *parent)
